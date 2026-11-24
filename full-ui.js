@@ -11,8 +11,7 @@ const ERP_NAV=[
  ['movements','☰','库存流水','Stock movements'],
  ['purchase','↓','采购管理','Purchasing'],
  ['shipping','➜','发货履约','Shipping'],
- ['returns','↩','退换货质检','Returns & QC'],
- ['used','◈','二手机业务','Used devices'],
+ ['returns','↩','退换货与二手机','Returns & Used Devices'],
  ['tickets','☏','售后工单','Customer service'],
  ['finance','€','财务发票','Finance & invoices'],
  ['reports','▥','经营报告','Reports'],
@@ -25,8 +24,8 @@ const ERP_NAV=[
 const ERP_GROUPS=[
  ['workspace','工作台','Workspace',['dashboard','tasks']],
  ['sales','销售与履约','Sales & Fulfillment',['intake','orders','shipping']],
- ['stock','采购与库存','Procurement & Inventory',['purchase','products','inventory','movements','imei','used']],
- ['service','客户服务','Customer Service',['tickets','returns']],
+ ['stock','采购与库存','Procurement & Inventory',['purchase','products','inventory','movements','imei']],
+ ['service','售后与二手机','Service & Used Devices',['tickets','returns']],
  ['finance','财务管理','Finance',['finance']],
  ['insights','分析与系统','Insights & Administration',['reports','audit','team','settings']]
 ];
@@ -84,7 +83,7 @@ const ERP_MODULES={
  inventory:{title:'库存管理',en:'Inventory',tables:[['stock_balances','仓库库存']]},
  purchase:{title:'采购管理',en:'Purchasing',tables:[['purchase_orders','采购单'],['purchase_items','采购明细']]},
  shipping:{title:'发货履约',en:'Shipping',tables:[['shipments','正式出货记录'],['source_logistics_evidence','历史物流凭证']]},
- returns:{title:'退换货质检',en:'Returns & QC',tables:[['returns','退换货申请'],['return_items','质检明细']]},
+ returns:{title:'退换货与二手机',en:'Returns & Used Devices',tables:[['returns','退换货申请'],['return_items','质检明细'],['used_devices','OPPO 二手机库存'],['used_inspections','二手机质检'],['refunds','退款记录']]},
  used:{title:'二手机业务',en:'Used devices',tables:[['used_devices','二手机台账'],['used_inspections','质检报告'],['used_orders','二手机订单'],['used_device_events','状态流水']]},
  tickets:{title:'售后工单',en:'Customer service',tables:[['tickets','售后工单'],['ticket_events','跟进事件']]},
  finance:{title:'财务发票',en:'Finance & invoices',tables:[['refunds','退款台账'],['invoices','发票台账']]},
@@ -765,8 +764,25 @@ async function erpRenderPage(){
  if(erpCurrentUserIdentity!==identity){ERP_CACHE.clear();erpCurrentUserIdentity=identity}
  erpRenderNav();el('heading').textContent=erpTitle(erpSelectedPage);
  if(el('subtitle'))el('subtitle').textContent=lang==='en'?(ERP_MODULES[erpSelectedPage]?.en||'Operations'):ERP_DESCRIPTIONS[erpSelectedPage]||'真实 ERP 数据';
- if(erpSelectedPage==='dashboard'){await erpDashboard();return}
- if(erpSelectedPage==='inventory'){await erpInventoryPage();return}
+ if(erpSelectedPage==='dashboard'){
+  if(typeof window.erpV4Dashboard==='function')await window.erpV4Dashboard();
+  else if(typeof window.erpDashboard==='function')await window.erpDashboard();
+  else await erpDashboard();
+  return;
+ }
+ if(erpSelectedPage==='inventory'){
+  if(window.erpStockTab!=='dos'&&typeof window.erpInventory==='function')await window.erpInventory();
+  else await erpInventoryPage();
+  if(el('content')){
+   const bar=document.createElement('div');bar.className='erp-toolbar';
+   bar.innerHTML='<button class="btn '+(window.erpStockTab!=='dos'?'primary':'')+'" data-stock-tab="reconcile">周库存核验 / 调整</button>'+
+    '<button class="btn '+(window.erpStockTab==='dos'?'primary':'')+'" data-stock-tab="dos">库存周转 / DOS 预警</button>';
+   el('content').prepend(bar);
+   bar.querySelectorAll('[data-stock-tab]').forEach(btn=>btn.onclick=()=>{window.erpStockTab=btn.dataset.stockTab;render()});
+  }
+  return;
+ }
+ if(typeof window.erpV4Page==='function'&&await window.erpV4Page(erpSelectedPage))return;
  if(!ERP_MODULES[erpSelectedPage])return;
  await erpRenderModule();
  if(erpSelectedPage==='settings')erpSettingsExtras();
