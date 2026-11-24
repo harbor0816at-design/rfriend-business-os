@@ -301,7 +301,10 @@ async function erpData(name,refresh=false){
  }
  const view=ERP_VIEWS[name]||'rfriend_erp_'+name;
  const orderBy={
-  stock_balances:'warehouse_id.asc,product_id.asc,quality_status.asc',inventory_dos:'product_id.asc,lookback_days.asc',
+  stock_balances:'warehouse_id.asc,product_id.asc,quality_status.asc',
+  inventory_weekly_snapshots:'week_start.desc,warehouse_id.asc,product_id.asc,quality_status.asc',
+  inventory_external_counts:'week_start.desc,warehouse_id.asc,product_id.asc,quality_status.asc,source.asc',
+  inventory_adjustment_requests:'requested_at.desc,id.asc',inventory_dos:'product_id.asc,lookback_days.asc',
   channels:'code.asc',warehouses:'code.asc',role_definitions:'code.asc',
   source_logistics_evidence:'source_record_id.asc',
   source_product_matches:'source_record_id.asc',
