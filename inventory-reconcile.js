@@ -153,13 +153,13 @@ function observableForm(target=null){
    const [warehouse_id,product_id,quality_status]=JSON.parse(key);
    const p=pro.get(product_id)||{},arr=obsMap.get(key)||[],snapshot=lookup.get(key);
    const line={warehouse_id,product_id,quality_status,warehouse:wh.get(warehouse_id)||warehouse_id,
-    sku:p.sku||'未知SKU',product:p.name||'—',on_hand:snapshot?.erp_on_hand??0,reserved:snapshot?.erp_reserved??0,
+    sku:p.sku||'未知SKU',product:p.product_name||'—',model:p.model||'待核',color:p.color||'待核',storage:p.storage_version||'待核',on_hand:snapshot?.erp_on_hand??0,reserved:snapshot?.erp_reserved??0,
     captured_at:snapshot?.captured_at||null};
    for(const o of arr.length?arr:[null])data.push({...line,source:o?.source||'',external_qty:o?.observed_qty??null,
     observed_at:o?.observed_at||null,delta:o?o.observed_qty-line.on_hand:null,reference:o?.reference||''});
   }
   return data.filter(o=>(!where||o.warehouse_id===where)&&(!quality||o.quality_status===quality)&&
-   (!skuSearch||(o.sku+' '+o.product).toLowerCase().includes(skuSearch)))
+   (!skuSearch||(o.sku+' '+o.product+' '+o.model+' '+o.color+' '+o.storage).toLowerCase().includes(skuSearch)))
    .sort((a,b)=>a.warehouse.localeCompare(b.warehouse)||a.sku.localeCompare(b.sku)||a.source.localeCompare(b.source));
  }
  function draw(){
@@ -174,13 +174,13 @@ function observableForm(target=null){
     erpMetric('发现差异',mismatches.length.toLocaleString('de-AT'),'不同来源差异记录')+
     erpMetric('待盘点项',unverified.length.toLocaleString('de-AT'),'尚无独立来源');
   const body=data.slice(0,500).map((o,i)=>'<tr><td>'+esc(o.warehouse)+'</td><td>'+esc(o.sku)+'</td><td>'+esc(o.quality_status)+'</td>'+
-    '<td>'+o.on_hand+'</td><td>'+o.reserved+'</td><td>'+esc(sourceLabel[o.source]||'未核验')+'</td>'+
+    '<td>'+esc(o.product)+'</td><td>'+esc(o.model)+'</td><td>'+esc(o.color)+'</td><td>'+esc(o.storage)+'</td><td>'+o.on_hand+'</td><td>'+o.reserved+'</td><td>'+esc(sourceLabel[o.source]||'未核验')+'</td>'+
     '<td>'+(o.external_qty===null?'—':o.external_qty)+'</td><td class="'+(o.delta!==null&&o.delta!==0?'erp-negative':'')+'">'+
     (o.delta===null?'待核验':o.delta===0?'一致':(o.delta>0?'+':'')+o.delta)+'</td>'+
     '<td class="erp-actions">'+(allowedWrite()?'<button class="btn invRecord" data-index="'+i+'">核验</button><button class="btn invAdjust" data-index="'+i+'">调整</button>':'—')+'</td></tr>').join('');
   $('inventoryResults').innerHTML='<div class="erp-scroll"><table><thead><tr>'+
-   ['仓库','SKU','质量状态','ERP 快照','预留','独立来源','来源数量','差额','操作'].map(x=>'<th>'+x+'</th>').join('')+
-   '</tr></thead><tbody>'+(body||'<tr><td colspan="9" class="erp-empty">本周无库存快照或不符合筛选条件</td></tr>')+
+   ['仓库','SKU','质量状态','商品名称','型号','颜色','内存版本','ERP 快照','预留','独立来源','来源数量','差额','操作'].map(x=>'<th>'+x+'</th>').join('')+
+   '</tr></thead><tbody>'+(body||'<tr><td colspan="13" class="erp-empty">本周无库存快照或不符合筛选条件</td></tr>')+
    '</tbody></table></div><div class="erp-mini">共 '+data.length+' 条对账记录；页面显示前 500 条，可导出完整结果。</div>';
   $('inventoryResults').querySelectorAll('.invRecord').forEach(btn=>btn.onclick=()=>observableForm(data[Number(btn.dataset.index)]));
   $('inventoryResults').querySelectorAll('.invAdjust').forEach(btn=>btn.onclick=()=>adjustmentForm(data[Number(btn.dataset.index)]));
@@ -214,7 +214,7 @@ function observableForm(target=null){
   try{
    [lastStock,lastCount,lastReq,warehouseList,products]=await Promise.all([
     erpData('inventory_weekly_snapshots',true),erpData('inventory_external_counts',true),
-    erpData('inventory_adjustment_requests',true),erpData('warehouses'),erpData('products')]);
+    erpData('inventory_adjustment_requests',true),erpData('warehouses'),erpData('product_catalog')]);
    if(!$('inventoryFilters'))return;
    currentWeek=currentWeek&&weeks().includes(currentWeek)?currentWeek:weeks()[0]||'';
    $('inventoryFilters').innerHTML='<label>库存周次 <select id="invWeek" class="control">'+
