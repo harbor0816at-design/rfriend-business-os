@@ -101,3 +101,28 @@ main{margin-left:248px;max-width:none}
  .cards{grid-template-columns:repeat(2,minmax(0,1fr))}
  .quickgrid{grid-template-columns:1fr}
 }
+
+/* Cross-dimensional executive reporting and weekly inventory reconciliation */
+.pivot-controls{display:grid;grid-template-columns:repeat(5,minmax(140px,1fr));gap:12px}
+.pivot-field{font-size:12px;font-weight:600;color:#63766a;display:flex;flex-direction:column;gap:6px}
+.pivot-field .control{width:100%;min-width:0;padding:9px 10px;border:1px solid #d9e2dc;border-radius:8px;background:#fff;color:#183229}
+.pivot-table th,.pivot-table td{padding:11px 13px;white-space:nowrap;vertical-align:middle;text-align:right}
+.pivot-table th:first-child,.pivot-table tr td:first-child{text-align:left;position:sticky;left:0;background:#f7f9f8}
+.pivot-table .pivot-total{background:#edf7f0;font-weight:700}
+.pivot-cell{border:0;background:transparent;font:inherit;padding:5px 8px;border-radius:6px;color:#0a7652;min-width:40px}
+.pivot-cell:hover:not(:disabled){background:#e0f3e7;text-decoration:underline}
+.pivot-cell:disabled{color:#82968a;cursor:default}
+.pivot-bar-row{display:grid;grid-template-columns:minmax(75px,145px) 1fr 42px;align-items:center;gap:10px;margin:15px 0;font-size:12px}
+.pivot-bar-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pivot-bar-row strong{text-align:right}
+.pivot-track{height:12px;background:#edf3ee;border-radius:12px;overflow:hidden}
+.pivot-track i{display:block;background:#128257;height:100%;border-radius:12px}
+.erp-negative{font-weight:750;color:#b64646;background:#fff0ee}
+#inventoryFilters label{font-size:12px;display:inline-flex;flex-direction:column;gap:5px;color:#69776e}
+#inventoryFilters .control{min-width:150px;padding:9px 10px}
+#inventoryResults table td{vertical-align:middle}
+#inventoryResults .erp-actions{white-space:nowrap}
+#inventoryResults .erp-actions .btn{padding:6px 9px;margin-right:4px;font-size:12px}
+#inventoryRequests .btn{padding:6px 8px;margin-right:5px}
+@media(max-width:1200px){.pivot-controls{grid-template-columns:repeat(3,minmax(150px,1fr))}}
+@media(max-width:760px){.pivot-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.pivot-bar-row{grid-template-columns:minmax(60px,100px) 1fr 35px}}
