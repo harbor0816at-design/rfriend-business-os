@@ -622,7 +622,7 @@ function erpCsvParse(input){
   if(c==='"'&&quoted&&input[i+1]==='"'){cell+='"';i++}
   else if(c==='"'){quoted=!quoted}
   else if(c===','&&!quoted){row.push(cell);cell=''}
-  else if((c==='\\n'||c==='\\r')&&!quoted){if(c==='\\r'&&input[i+1]==='\\n')i++;row.push(cell);if(row.some(x=>x.length))rows.push(row);row=[];cell=''}
+  else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&input[i+1]==='\n')i++;row.push(cell);if(row.some(x=>x.length))rows.push(row);row=[];cell=''}
   else cell+=c;
  }
  row.push(cell);if(row.some(x=>x.length))rows.push(row);
