@@ -1,0 +1,36 @@
+
+/* Demo v5 visual system — Rfriend OS production adapter */
+:root{--green:#128257;--dark:#19332a;--bg:#f5f7f6;--muted:#75827b;--line:#e4e9e6}
+body{background:var(--bg);color:#182d24;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft Yahei',sans-serif;font-size:14px}
+.shell{min-height:100vh;display:flex}.sidebar{width:248px;position:fixed;inset:0 auto 0 0;padding:24px 14px;background:#112e24;color:#fff;overflow-y:auto;z-index:5}
+.brand{font-size:21px;line-height:1.3;font-weight:800;margin:0 8px 3px}.brand span{color:#68d7a0}.brand small{margin:7px 0 19px;font-size:11px;color:#b2c8bc;font-weight:400}
+.sidebar .side-label{padding:12px 10px 7px;border-bottom:1px solid #365649;margin:13px 0 5px;color:#a6c3b5;font-size:11px;letter-spacing:.2px}
+.sidebar .nav{display:block;width:100%;text-align:left;background:none;color:#b4c7bd;border:0;border-radius:9px;font-size:13px;padding:12px;margin:1px 0;white-space:normal}
+.sidebar .nav.active,.sidebar .nav:hover{background:#285641;color:#fff}
+.sidebar .nav em{font-style:normal;opacity:.8;margin-right:8px}
+main{margin-left:248px;max-width:none;min-width:0;flex:1}.top{border:0;background:transparent;padding:27px 30px 0;gap:15px}
+.top h1{font-size:25px;color:#182d24}.top .actions{gap:8px}.top .btn,.erp-actions button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:9px 12px;font-size:13px;color:#243e30}.top .btn:hover,.erp-actions button:hover{border-color:#128257;color:#128257}.top .actions .btn#refreshBtn{background:#128257;border-color:#128257;color:#fff}
+.content{max-width:1900px;padding:18px 30px 50px}.foot{margin-left:0}
+.cards{grid-template-columns:repeat(4,minmax(140px,1fr));margin:0 0 17px;gap:13px}
+.card,.panel{background:white;border:1px solid var(--line);border-radius:12px;box-shadow:0 2px 10px #132d2008}.card{padding:17px}.card small{color:#75827b}.card strong{font-size:26px;color:#182d24;margin:10px 0}
+.panel{padding:19px;margin-bottom:16px}.panel h3{font-size:16px;color:#243b2e;margin:0 0 13px}
+table{white-space:nowrap;font-size:12.5px}th{background:#f7f9f8;color:#65776d;padding:12px;font-weight:650}td{padding:11px 12px;border-bottom:1px solid #edf0ed}tbody tr:hover td{background:#fcfdfc}
+.message{background:#f0f8f2;border:1px solid #d8eadf;border-radius:8px;padding:13px 15px;color:#3b614c;line-height:1.7}.message.warn{background:#fff8e8;border-color:#f2e3bf;color:#805d22}
+.erp-topline{font-size:12px;color:#77877e;margin:-6px 0 18px}
+.erp-toolbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin:4px 0 16px}
+.erp-toolbar select,.erp-toolbar input,.erp-field input,.erp-field select,.erp-field textarea{padding:9px 11px;border:1px solid #d9e2dc;border-radius:8px;background:white;color:#183229;font:inherit;min-width:130px}
+.erp-toolbar input{width:235px}.erp-toolbar button,.erp-actions button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:9px 12px;font:inherit;cursor:pointer}
+.erp-toolbar button.primary,.erp-actions button.primary,.erp-modal-actions button.primary{background:#128257;color:white;border-color:#128257}
+.erp-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:15px;gap:15px}.erp-header h3{margin:0}.erp-sub{font-size:12px;color:#77877e;margin-top:4px}
+.erp-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:16px}.erp-empty{text-align:center;padding:35px;color:#75827b}
+.erp-tag{padding:5px 9px;background:#eef3f0;border-radius:15px;font-size:11px;color:#4b695b}.erp-badge-warning{background:#fff2df;color:#a56b13}
+.erp-scroll{overflow:auto;max-height:610px}.erp-detail{position:fixed;inset:0;z-index:35;display:flex;align-items:center;justify-content:center;background:#0a2118a8;padding:16px}.erp-modal{max-height:92vh;overflow:auto;width:min(780px,100%);border-radius:14px;background:white;box-shadow:0 15px 80px #001b1644}
+.erp-modal-head,.erp-modal-actions{display:flex;align-items:center;justify-content:space-between;padding:18px 23px;border-bottom:1px solid var(--line)}.erp-modal-head h2{margin:0;font-size:19px}.erp-modal-body{padding:23px}.erp-modal-actions{border:0;border-top:1px solid var(--line);justify-content:flex-end;gap:8px}
+.erp-modal-actions button{padding:9px 13px;border:1px solid var(--line);border-radius:8px;background:white;cursor:pointer}
+.erp-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}.erp-field label{display:block;font-size:12px;font-weight:600;color:#64736a;margin-bottom:6px}.erp-field input,.erp-field select,.erp-field textarea{width:100%}.erp-field.wide{grid-column:1/-1}.erp-field textarea{min-height:85px}
+.erp-kv{display:grid;grid-template-columns:155px 1fr;gap:8px 15px;margin:5px 0}.erp-kv dt{color:#73857a}.erp-kv dd{margin:0;overflow-wrap:anywhere}
+.erp-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.erp-pagination{display:flex;justify-content:flex-end;gap:10px;align-items:center;margin-top:12px}
+.erp-mini{font-size:11px;color:#72877a}.erp-blocked{padding:13px;background:#fff8e8;border:1px solid #f1e1b2;color:#785a18;border-radius:8px}
+@media(max-width:1050px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.erp-grid{grid-template-columns:1fr}}
+@media(max-width:760px){.shell{display:block}.sidebar{width:100%;position:static;display:block;max-height:48vh;overflow:auto;padding:12px}.sidebar .side-label{display:none}.sidebar .nav{display:inline-block;width:auto;white-space:nowrap;padding:9px}.sidebar .brand{font-size:16px;display:block}.sidebar .brand small{display:none}main{margin:0}.top{padding:16px;display:flex;flex-wrap:wrap}.top h1{font-size:22px}.content{padding:14px}.erp-fields{grid-template-columns:1fr}.erp-kv{grid-template-columns:1fr}.erp-kv dt{font-weight:700}}
