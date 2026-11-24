@@ -111,6 +111,61 @@ function erpAllowed(slug){
  const roles=ERP_ROLE_ALLOW[profile?.role]||ERP_ROLE_ALLOW.support;
  return roles.includes('*')||roles.includes(slug);
 }
+function erpBuildTopActions(){
+ const bar=document.querySelector('.top .actions');if(!bar||bar.querySelector('#erpQuickAction'))return;
+ const buttons=document.createElement('div');buttons.className='erp-actions';buttons.id='erpGlobalActions';
+ buttons.innerHTML='<button id="erpBackup" class="btn">↓ 备份数据</button>'+
+ '<button id="erpRestore" class="btn">↑ 恢复备份</button>'+
+ '<button id="erpBulkGlobal" class="btn">⇪ 批量添加</button>'+
+ '<button id="erpQuickAction" class="btn primary">＋ 快速操作</button>';
+ bar.insertBefore(buttons,bar.firstChild);
+ buttons.querySelector('#erpBackup').onclick=erpBackup;
+ buttons.querySelector('#erpRestore').onclick=erpRestorePreview;
+ buttons.querySelector('#erpBulkGlobal').onclick=()=>erpChooseAction('bulk');
+ buttons.querySelector('#erpQuickAction').onclick=()=>erpChooseAction('new');
+}
+async function erpBackup(){
+ if(profile?.role!=='admin'){alert('仅管理员允许导出全业务数据。');return;}
+ const m=erpModal('<p>将导出当前授权范围内已录入的 ERP 数据记录（JSON）。这不是 Supabase 数据库级备份，不包含存储文件、数据库对象或用户密码。</p>'+
+ '<p id="erpBackupStatus">正在汇总业务表…</p>','导出业务数据');
+ const entities=[...new Set(Object.values(ERP_MODULES).flatMap(x=>x.tables.map(([k])=>k)))];
+ const dump={app:'Rfriend Business OS',generated_at:new Date().toISOString(),type:'business_data_export',tables:{},errors:[]};
+ for(const entity of entities){
+  const status=m.querySelector('#erpBackupStatus');if(!status)break;status.textContent='正在读取 '+entity+'…';
+  try{dump.tables[entity]=await erpData(entity)}catch(e){dump.errors.push(entity+': '+errorMessage(e))}
+ }
+ const blob=new Blob([JSON.stringify(dump,null,2)],{type:'application/json'});
+ const link=URL.createObjectURL(blob),a=document.createElement('a');a.href=link;a.download='rfriend-erp-export-'+new Date().toISOString().slice(0,10)+'.json';a.click();
+ setTimeout(()=>URL.revokeObjectURL(link),2000);
+ if(m.querySelector('#erpBackupStatus'))m.querySelector('#erpBackupStatus').textContent='导出完成：'+Object.keys(dump.tables).length+' 张表。失败 '+dump.errors.length+' 张。请妥善保管客户数据。';
+}
+function erpRestorePreview(){
+ const m=erpModal('<div class="erp-blocked">安全说明：生产数据库不允许直接用本地 JSON 覆盖。备份恢复需核对版本、外键、重复记录并经过审批。</div>'+
+ '<p style="margin-top:15px">你可以先选择之前导出的 JSON 文件，在此查看表名及记录数量，不会写入数据库。</p>'+
+ '<input id="erpRestoreFile" type="file" accept=".json,application/json"><div id="erpRestoreResult" style="margin-top:15px"></div>','恢复备份 · 只读预检');
+ m.querySelector('#erpRestoreFile').onchange=async e=>{
+  try{
+   const src=JSON.parse(await e.target.files[0].text());
+   if(!src||!src.tables||src.type!=='business_data_export')throw new Error('非 ERP 业务备份文件');
+   m.querySelector('#erpRestoreResult').innerHTML=erpPanel('备份内容（尚未恢复）',
+   '<div class="tablewrap"><table><thead><tr><th>业务表</th><th>记录数</th></tr></thead><tbody>'+
+   Object.entries(src.tables).map(([k,v])=>'<tr><td>'+erpEsc(k)+'</td><td>'+ (Array.isArray(v)?v.length:'异常')+'</td></tr>').join('')+
+   '</tbody></table></div><p class="erp-blocked">为防止覆盖真实业务，整库恢复必须由服务器管理员审核执行。</p>');
+  }catch(err){m.querySelector('#erpRestoreResult').textContent='文件不符合 ERP 备份结构：'+errorMessage(err)}
+ };
+}
+function erpChooseAction(mode){
+ const list=Object.keys(ERP_FIELDS).filter(x=>profile?.role==='admin'||(
+  ['tickets','returns','work_tasks'].includes(x)&&profile?.role==='support')||(
+  ['products','purchase_orders','orders','used_devices','tickets'].includes(x)&&profile?.role==='operations')||(
+  ['purchase_orders','invoices','work_tasks'].includes(x)&&profile?.role==='finance')||(
+  ['used_devices','work_tasks'].includes(x)&&profile?.role==='warehouse'));
+ const m=erpModal('<div class="erp-toolbar">'+list.map(key=>'<button data-erp-action="'+erpEsc(key)+'" class="btn">'+erpEsc(key)+'</button>').join('')+'</div>','快速'+(mode==='bulk'?'批量导入':'新建业务'));
+ m.querySelectorAll('[data-erp-action]').forEach(button=>button.onclick=()=>{
+  const entity=button.dataset.erpAction;m.remove();
+  if(mode==='bulk'){erpTab=entity;erpBulkModal()}else erpOpenCreate(entity);
+ });
+}
 function erpBuildNav(){
  const root=document.querySelector('.sidebar');
  root.innerHTML='<div class="brand">Rfriend <span>OS</span><small>OPPO Austria · 进销存业务系统</small></div>'+
@@ -514,4 +569,5 @@ window.render=function(){return erpRenderPage()};
 const oldLoadData=window.loadData;
 document.querySelector('#lang')?.addEventListener('change',()=>{erpRenderNav();render()});
 erpBuildNav();
+erpBuildTopActions();
 if(profile)render();
