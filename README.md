@@ -83,3 +83,24 @@ The production database transaction tests verified purchase creation → approva
 - Create a test SKU and draft purchase order *only in approved test mode*; do not mix testing with actual business operations.
 - Confirm permissions for support, finance and warehouse staff.
 - Finish external platform, warehouse and payment integrations before calling the entire ERP fully operational.
+
+## Executive order pivot (2026-11-24)
+
+The **经营总览 / Overview** now supports 5 fixed templates plus custom **row × column** cross-analysis across channel, series, model, category, order status and local order date. Time granularity supports **year / month / day**, with start/end dates, drill-down to individual orders, and CSV export. The database view `public.rfriend_erp_order_dimensions` preserves exactly one record per ERP order. Historical classification: 2,490 orders; 344 currently labelled `型号待核`, nine missing order dates. Historical orders with multi-product bundles count **one order**, not one sold unit per product. Unknown model classifications must never be silently guessed.
+
+## Weekly warehouse reconciliation (2026-11-24)
+
+The **库存管理 / Inventory** module supports:
+- ERP weekly baseline snapshots (as of each Monday), current-week manual refresh, recent-week trend.
+- Import independent stock observation for byrd/0815/office/used/physical (single and validated batch CSV).
+- Cross-compare `warehouse × SKU × quality status × week`: ERP baseline vs independent observation; show `未核验`, matched, or delta.
+- Manual adjustment requests with reason/evidence and **different verified user** admin/operations approval; server rechecks stock balance and reserved stock before a transactional ledger update.
+- Audit entries and idempotent movement keys; changes only after approval.
+- Weekly snapshot job: `cron.job` name `rfriend-erp-weekly-inventory`, `0 6 * * 1` in **UTC** (Monday morning, 07:00/08:00 Vienna depending on DST).
+- Initial weekly snapshot: 207 balance lines with 2,221 on-hand units. External WMS/physical observations start **empty**: no false "all matched" claim.
+
+The CSV template columns are `warehouse_code,sku,quality_status,source,observed_qty,reference`. External reports are only captured on upload; byrd/0815 connections are **not yet automatic**. Cron captures ERP stock weekly, not independent warehouse counts.
+
+### Test evidence
+
+Verified RLS-admin counts: 2,490 orders in the pivot and 207 weekly stock lines. A full two-user request → second-user approval → movement transaction test passed inside `BEGIN … ROLLBACK`. The test left **zero** adjustment requests and zero external count records.
