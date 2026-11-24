@@ -268,6 +268,7 @@ function erpBindDetail(rows,table){
    ERP_MODULES[erpSelectedPage]?.title||table);
   erpAttachPurchaseActions(modal,table,row);
   erpAttachServiceActions(modal,table,row);
+  erpAttachInspectionActions(modal,table,row);
   modal.querySelector('#erpStateForm')?.addEventListener('submit',async e=>{
    e.preventDefault();const body=Object.fromEntries(new FormData(e.target));
    const btn=e.target.querySelector('[type=submit]'),status=modal.querySelector('#erpStatusMsg');btn.disabled=true;
@@ -384,6 +385,66 @@ function erpAttachServiceActions(modal,table,row){
   };
  }
 }
+async function erpImeiEditor(){
+ const [products,depots]=await Promise.all([erpData('products'),erpData('warehouses')]);
+ if(!products.length){alert('请先在商品管理中创建 SKU。');return}
+ const body='<p class="erp-blocked">新增串码登记为 quarantine（待核查）状态，不会自动增加库存或变更可售数量。</p>'+
+ '<form id="erpImeiForm"><div class="erp-fields"><div class="erp-field"><label>IMEI（15位数字）</label><input name="imei" pattern="[0-9]{15}" required maxlength="15" autocomplete="off"></div>'+
+ '<div class="erp-field"><label>商品 SKU</label><select name="product">'+products.map(p=>'<option value="'+erpEsc(p.id)+'">'+erpEsc(p.sku)+'</option>').join('')+'</select></div>'+
+ '<div class="erp-field"><label>所属仓库</label><select name="warehouse"><option value="">暂未指定</option>'+depots.map(w=>'<option value="'+erpEsc(w.id)+'">'+erpEsc(w.name)+'</option>').join('')+'</select></div></div>'+
+ '<div class="erp-actions" style="margin-top:15px"><button type="submit" class="primary">确认串码登记</button></div><p id="erpImeiStatus"></p></form>';
+ const m=erpModal(body,'IMEI 串码登记');
+ m.querySelector('#erpImeiForm').onsubmit=async e=>{
+  e.preventDefault();const val=Object.fromEntries(new FormData(e.target)),btn=e.target.querySelector('button'),status=m.querySelector('#erpImeiStatus');
+  btn.disabled=true;try{
+   await authorized('/rest/v1/rpc/rfriend_erp_register_imei',{method:'POST',
+    body:{p_imei:val.imei,p_product_id:val.product,p_warehouse_id:val.warehouse||null}});
+   status.textContent='已成功登记 IMEI，状态：quarantine';status.style.color='#128257';ERP_CACHE.delete('device_imeis');
+  }catch(err){status.textContent=errorMessage(err);status.style.color='#b03432'}finally{btn.disabled=false}
+ };
+}
+function erpAttachInspectionActions(modal,table,row){
+ if(!['admin','operations','warehouse'].includes(profile?.role))return;
+ if(table==='used_devices'&&['awaiting_inspection','inspecting','returned_quarantine','repair'].includes(row.status)){
+  const area=document.createElement('div');
+  area.innerHTML='<section style="margin-top:20px"><h3>二手机入库质检报告</h3>'+
+   '<form id="erpUsedInspection"><div class="erp-fields"><div class="erp-field"><label>质检成色</label>'+
+   '<select name="grade">'+['A','B','C','D'].map(v=>'<option>'+v+'</option>').join('')+'</select></div>'+
+   '<div class="erp-field"><label>电池健康度 %</label><input name="battery" type="number" min="0" max="100" required></div>'+
+   '<div class="erp-field"><label>屏幕情况</label><input name="screen"></div><div class="erp-field"><label>外壳情况</label><input name="housing"></div>'+
+   '<div class="erp-field"><label>质检结论</label><select name="outcome"><option value="ready">合格可售</option><option value="repair">维修</option><option value="scrapped">报废</option></select></div>'+
+   '<div class="erp-field"><label>备注</label><input name="notes"></div></div>'+
+   '<div class="erp-actions" style="margin-top:15px"><button type="submit" class="primary">保存质检报告</button></div><p id="erpUsedInspectionStatus"></p></form></section>';
+  modal.querySelector('.erp-modal-body').appendChild(area);
+  area.querySelector('#erpUsedInspection').onsubmit=async e=>{
+   e.preventDefault();const v=Object.fromEntries(new FormData(e.target)),status=area.querySelector('#erpUsedInspectionStatus'),btn=e.target.querySelector('button');btn.disabled=true;
+   try{
+    await authorized('/rest/v1/rpc/rfriend_erp_inspect_used_device',{method:'POST',body:{
+     p_device_id:row.id,p_grade:v.grade,p_battery_health:Number(v.battery),p_screen:v.screen,p_housing:v.housing,p_outcome:v.outcome,p_notes:v.notes
+    }});
+    status.textContent='质检报告已保存';status.style.color='#128257';ERP_CACHE.delete('used_devices');ERP_CACHE.delete('used_inspections');
+   }catch(err){status.textContent=errorMessage(err);status.style.color='#b03432'}finally{btn.disabled=false}
+  };
+ }
+ if(table==='returns'&&['received','inspection'].includes(row.return_status)){
+  const area=document.createElement('div');
+  area.innerHTML='<section style="margin-top:20px"><h3>退货质检结果</h3>'+
+   '<div class="erp-blocked">质检只记录状态，不自动入库或申请退款。</div>'+
+   '<form id="erpReturnInspect"><div class="erp-fields"><div class="erp-field"><label>质检结论</label>'+
+   '<select name="result"><option value="sellable">合格可售</option><option value="repair">需维修</option><option value="scrap">需报废</option><option value="disputed">存在争议</option></select></div>'+
+   '<div class="erp-field"><label>质检说明</label><input name="notes"></div></div>'+
+   '<div class="erp-actions" style="margin-top:15px"><button type="submit" class="primary">保存质检结果</button></div><p id="erpReturnInspectStatus"></p></form></section>';
+  modal.querySelector('.erp-modal-body').appendChild(area);
+  area.querySelector('#erpReturnInspect').onsubmit=async e=>{
+   e.preventDefault();const v=Object.fromEntries(new FormData(e.target)),status=area.querySelector('#erpReturnInspectStatus'),btn=e.target.querySelector('button');btn.disabled=true;
+   try{
+    await authorized('/rest/v1/rpc/rfriend_erp_inspect_return',{method:'POST',
+     body:{p_return_id:row.id,p_result:v.result,p_notes:v.notes}});
+    status.textContent='质检结果保存成功';status.style.color='#128257';ERP_CACHE.delete('returns');
+   }catch(err){status.textContent=errorMessage(err);status.style.color='#b03432'}finally{btn.disabled=false}
+  };
+ }
+}
 function erpTitle(id){return ERP_NAV.find(x=>x[0]===id)?.[lang==='en'?3:2]||'经营总览'}
 async function erpOpenCreate(entity){
  const defs=ERP_FIELDS[entity];if(!defs){erpModal('<p>该模块的创建动作尚未开放服务端接口。</p>');return}
@@ -427,6 +488,7 @@ async function erpRenderModule(){
  (ERP_FIELDS[erpTab]?'<button class="primary" id="erpAdd">＋ 新建</button>':'')+
  (erpTab==='refunds'?'<button class="primary" id="erpRequestRefund">＋ 申请退款</button>':'')+
  (slug==='shipping'&&erpTab==='shipments'?'<button class="primary" id="erpManualShipment">＋ 手工发货</button>':'')+
+ (slug==='imei'&&erpTab==='device_imeis'?'<button class="primary" id="erpRegisterImei">＋ 登记 IMEI</button>':'')+
  (slug==='team'&&erpTab==='staff_roles'&&profile?.role==='admin'?'<button class="primary" id="erpStaffEdit">＋ 授予员工权限</button>':'')+
  '</div><div id="erpRecords"><p class="erp-empty">正在从 Supabase 读取…</p></div>','数据源：erp.'+erpTab+' · 角色：'+(profile?.role||'-'));
  document.querySelectorAll('[data-erp-tab]').forEach(b=>b.onclick=()=>{erpTab=b.dataset.erpTab;erpSearch='';erpOffset=0;render()});
@@ -435,6 +497,7 @@ async function erpRenderModule(){
  document.querySelector('#erpReload').onclick=()=>{ERP_CACHE.delete(erpTab);erpDrawRows()};
  document.querySelector('#erpAdd')?.addEventListener('click',()=>erpOpenCreate(erpTab));
  document.querySelector('#erpRequestRefund')?.addEventListener('click',()=>erpRefundCreate());
+ document.querySelector('#erpRegisterImei')?.addEventListener('click',()=>erpImeiEditor());
  document.querySelector('#erpManualShipment')?.addEventListener('click',()=>{
   const m=erpModal(shipmentView(),'手工发货 · 需仓库确认');bindPage();
  });
