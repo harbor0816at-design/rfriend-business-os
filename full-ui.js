@@ -22,29 +22,31 @@ const ERP_NAV=[
  ['imei','⌗','串码识别','IMEI recognition']
 ];
 const ERP_GROUPS=[
- ['workspace','工作台','Workspace',['dashboard','tasks']],
- ['sales','销售与履约','Sales & Fulfillment',['intake','orders','shipping']],
- ['stock','采购与库存','Procurement & Inventory',['products','inventory','purchase','movements','imei','used']],
- ['care','客户服务','Customer Service',['tickets','returns']],
- ['money','财务管理','Finance',['finance']],
- ['system','分析与系统','Insights & Administration',['reports','audit','team','settings']]
+ ['desk','工作台','Workspace',['dashboard','tasks']],
+ ['sales','销售与履约','Sales & Fulfillment',['orders','intake','shipping']],
+ ['supply','商品与供应链','Products & Supply Chain',['products','purchase','inventory','movements','imei']],
+ ['service','售后与二手','Service & Used Devices',['tickets','returns','used']],
+ ['finance','财务','Finance',['finance']],
+ ['analytics','数据分析','Analytics',['reports']],
+ ['system','系统管理','Administration',['team','audit','settings']]
 ];
+let erpOpenGroup='desk';
 const ERP_MODULES={
  products:{title:'商品管理',en:'Products',tables:[['products','商品目录'],['sku_dictionary','SKU 字典'],['product_keyword_rules','SKU 识别规则']]},
- movements:{title:'库存流水',en:'Stock movements',tables:[['inventory_movements','正式库存流水'],['stock_balances','仓库库存余额']]},
- tasks:{title:'我的工作台',en:'My workspace',tables:[['work_tasks','工作任务'],['reconciliation_cases','订单核查异常']]},
- intake:{title:'订单导入',en:'Order intake',tables:[['import_batches','导入批次'],['order_source_records','历史源文件行'],['reconciliation_cases','数据质量异常'],['sku_dictionary','SKU 对照字典']]},
+ movements:{title:'库存流水',en:'Stock movements',tables:[['inventory_movements','正式库存流水']]},
+ tasks:{title:'我的工作台',en:'My workspace',tables:[['work_tasks','工作任务']]},
+ intake:{title:'订单导入',en:'Order intake',tables:[['import_batches','导入批次'],['order_source_records','历史源文件行'],['reconciliation_cases','数据质量异常']]},
  orders:{title:'销售订单',en:'Sales orders',tables:[['orders','订单主表'],['order_items','订单商品明细'],['order_status_history','订单状态历史']]},
- inventory:{title:'库存中心',en:'Inventory',tables:[['stock_balances','仓库库存'],['products','商品目录'],['inventory_movements','库存流水']]},
+ inventory:{title:'库存管理',en:'Inventory',tables:[['stock_balances','仓库库存']]},
  purchase:{title:'采购管理',en:'Purchasing',tables:[['purchase_orders','采购单'],['purchase_items','采购明细']]},
  shipping:{title:'发货履约',en:'Shipping',tables:[['shipments','正式出货记录'],['source_logistics_evidence','历史物流凭证']]},
  returns:{title:'退换货质检',en:'Returns & QC',tables:[['returns','退换货申请'],['return_items','质检明细']]},
  used:{title:'二手机业务',en:'Used devices',tables:[['used_devices','二手机台账'],['used_inspections','质检报告'],['used_orders','二手机订单'],['used_device_events','状态流水']]},
  tickets:{title:'售后工单',en:'Customer service',tables:[['tickets','售后工单'],['ticket_events','跟进事件']]},
  finance:{title:'财务发票',en:'Finance & invoices',tables:[['refunds','退款台账'],['invoices','发票台账']]},
- audit:{title:'操作日志',en:'Audit trail',tables:[['audit_events','真实审计流水'],['order_status_history','订单状态变更']]},
+ audit:{title:'操作日志',en:'Audit trail',tables:[['audit_events','真实审计流水']]},
  team:{title:'员工与角色',en:'Employees & roles',tables:[['staff_roles','员工角色'],['role_definitions','角色权限定义']]},
- imei:{title:'串码识别',en:'IMEI recognition',tables:[['device_imeis','设备串码'],['imei_recognition_reviews','待核查识别结果'],['sku_dictionary','SKU 码表']]},
+ imei:{title:'串码识别',en:'IMEI recognition',tables:[['device_imeis','设备串码'],['imei_recognition_reviews','待核查识别结果']]},
  settings:{title:'设置与备份',en:'Settings',tables:[['channels','渠道配置'],['warehouses','仓库配置'],['product_keyword_rules','自动识别规则']]},
  reports:{title:'经营报告',en:'Business reports',tables:[['report_sales_by_month','月度渠道销售'],['report_order_stage_kpis','订单阶段分布'],['report_order_dates_quality','订单时间完整性'],['report_order_lifecycle','订单生命周期'],['report_source_product_mix','产品结构'],['report_review_queue','待核对队列'],['report_workflow_summary','工作流摘要']]}
 };
@@ -181,18 +183,36 @@ function erpBuildNav(){
  erpRenderNav();
 }
 function erpRenderNav(){
- const q=(document.querySelector('#erpNavSearch')?.value||'').toLowerCase();
+ const q=(document.querySelector('#erpNavSearch')?.value||'').trim().toLowerCase();
  const root=document.querySelector('#erpNavGroups');if(!root)return;
  root.innerHTML=ERP_GROUPS.map(([id,zh,en,items])=>{
-  const links=ERP_NAV.filter(x=>items.includes(x[0])&&erpAllowed(x[0])&&(x[2]+x[3]).toLowerCase().includes(q));
-  return links.length?'<div class="side-label">'+(lang==='zh'?zh:en)+'</div>'+
-   links.map(([key,icon,cn,english])=>'<button class="nav '+(erpSelectedPage===key?'active':'')+'" data-erp-nav="'+key+'"><em>'+icon+'</em>'+(lang==='zh'?cn:english)+'</button>').join(''):'';
+  const allowed=ERP_NAV.filter(x=>items.includes(x[0])&&erpAllowed(x[0]));
+  const matching=allowed.filter(x=>(x[2]+' '+x[3]).toLowerCase().includes(q));
+  if(!allowed.length||q&&matching.length===0&&!(zh+' '+en).toLowerCase().includes(q))return '';
+  const visible=q?allowed.filter(x=>matching.includes(x)||(zh+' '+en).toLowerCase().includes(q)):allowed;
+  const opened=!!q||erpOpenGroup===id;
+  const hasSelected=allowed.some(x=>x[0]===erpSelectedPage);
+  return '<div class="erp-nav-section">'+
+   '<button class="erp-nav-group '+(hasSelected?'selected':'')+'" data-erp-group="'+id+'" aria-expanded="'+opened+'">'+
+    '<span>'+(lang==='zh'?zh:en)+'</span><span class="erp-nav-count">'+allowed.length+'</span><span class="erp-nav-chevron">'+(opened?'⌄':'›')+'</span></button>'+
+   (opened?'<div class="erp-nav-sub">'+visible.map(([key,icon,cn,english])=>
+     '<button class="nav '+(erpSelectedPage===key?'active':'')+'" data-erp-nav="'+key+'"><em>'+icon+'</em>'+(lang==='zh'?cn:english)+'</button>'
+   ).join('')+'</div>':'')+
+  '</div>';
  }).join('');
+ root.querySelectorAll('[data-erp-group]').forEach(button=>button.addEventListener('click',()=>{
+  const id=button.dataset.erpGroup;
+  erpOpenGroup=erpOpenGroup===id?'':id;
+  erpRenderNav();
+ }));
  root.querySelectorAll('[data-erp-nav]').forEach(button=>button.addEventListener('click',()=>erpNavigate(button.dataset.erpNav)));
 }
 function erpNavigate(pageId){
  if(!erpAllowed(pageId))return;
- erpSelectedPage=pageId;erpTab='';erpSearch='';erpOffset=0;
+ erpSelectedPage=pageId;
+ const group=ERP_GROUPS.find(x=>x[3].includes(pageId));
+ if(group)erpOpenGroup=group[0];
+ erpTab='';erpSearch='';erpOffset=0;
  erpRenderNav();render();
 }
 function erpPanel(title,content,subtitle=''){
