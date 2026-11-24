@@ -729,7 +729,9 @@ async function erpInventoryPage(){
  const stamp=++erpLoading;
  root.innerHTML='<div class="erp-panel">正在读取真实库存与销售订单…</div>';
  try{
-  const [products,stock,dos,depots]=await Promise.all(['products','stock_balances','inventory_dos','warehouses'].map(k=>erpData(k,true)));
+  const [rawProducts,stock,dos,depots,catalog]=await Promise.all(['products','stock_balances','inventory_dos','warehouses','product_catalog'].map(k=>erpData(k,true)));
+  const detailIndex=new Map(catalog.map(p=>[p.id,p]));
+  const products=rawProducts.map(p=>({...p,...(detailIndex.get(p.id)||{}),product_description:p.product_description||detailIndex.get(p.id)?.product_name||p.name}));
   if(stamp!==erpLoading||erpSelectedPage!=='inventory')return;
   const labels={out_of_stock:'缺货',low_stock:'低于安全库存',critical:'严重不足',warning:'库存不足',watch:'库存关注',normal:'正常',no_sales:'无动销',sales_data_incomplete:'数据不足'};
   const h=erpEsc, num=v=>Number(v)||0;
@@ -748,13 +750,13 @@ async function erpInventoryPage(){
    root.innerHTML=cards([['实物库存',sums.total],['全新可用',sums.available],['不可售 / 开箱',sums.other],['缺货 SKU',list.filter(x=>x.status==='out_of_stock').length]])+
     '<div class="message warn">DOS = 可用库存 ÷ 全渠道已匹配订单日均量。分仓 DOS 使用同一全渠道销量，仅代表该仓对全渠道需求的支撑能力；匹配不完整时 DOS 可能偏高。订单匹配覆盖：'+h(coverage)+'</div>'+
     erpPanel('分仓库存 / DOS 预警','<div class="erp-toolbar"><select id="invWarehouse">'+opts.map(([v,n])=>'<option value="'+h(v)+'" '+(v===erpInventoryWarehouse?'selected':'')+'>'+h(n)+'</option>').join('')+'</select><input id="invSearch" placeholder="SKU / EAN / 产品名称描述" value="'+h(erpInventoryQuery)+'"><select id="invAlert"><option value="all">全部预警</option>'+Object.entries(labels).map(([v,n])=>'<option value="'+v+'" '+(erpInventoryAlert===v?'selected':'')+'>'+n+'</option>').join('')+'</select><button id="invRun">查询</button><button id="invReload">刷新</button><button id="invExport">导出 CSV</button></div>'+
-    '<div class="tablewrap"><table><thead><tr>'+['SKU','EAN','产品名称描述','实物库存','可用库存','DOS 15','DOS 21','DOS 30','预警','30天建议补货(估计)'].map(x=>'<th>'+x+'</th>').join('')+'</tr></thead><tbody>'+list.map(x=>'<tr>'+[x.p.sku,x.p.ean||'待维护',x.p.product_description,x.total,x.available,...x.periods.map(d=>value(d,x)),labels[x.status],x.periods[2]?.sales_units>0&&erpInventoryWarehouse==='all'?x.periods[2].suggested_replenishment_30d:'—'].map(v=>'<td>'+h(v??'—')+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>','已展示 '+list.length+' 个商品');
+    '<div class="tablewrap"><table><thead><tr>'+['SKU','EAN','产品名称','型号','颜色','内存版本','实物库存','可用库存','DOS 15','DOS 21','DOS 30','预警','30天建议补货(估计)'].map(x=>'<th>'+x+'</th>').join('')+'</tr></thead><tbody>'+list.map(x=>'<tr>'+[x.p.sku,x.p.ean||'待维护',x.p.product_description,x.p.model||'待核',x.p.color||'待核',x.p.storage_version||'待核',x.total,x.available,...x.periods.map(d=>value(d,x)),labels[x.status],x.periods[2]?.sales_units>0&&erpInventoryWarehouse==='all'?x.periods[2].suggested_replenishment_30d:'—'].map(v=>'<td>'+h(v??'—')+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>','已展示 '+list.length+' 个商品');
    el('invWarehouse').onchange=e=>{erpInventoryWarehouse=e.target.value;draw()};
    el('invAlert').onchange=e=>{erpInventoryAlert=e.target.value;draw()};
    el('invRun').onclick=()=>{erpInventoryQuery=el('invSearch').value;draw()};
    el('invSearch').onkeydown=e=>{if(e.key==='Enter'){erpInventoryQuery=e.target.value;draw()}};
    el('invReload').onclick=erpInventoryPage;
-   el('invExport').onclick=()=>erpDownload('inventory',list.map(x=>({sku:x.p.sku,ean:x.p.ean,product_description:x.p.product_description,warehouse:erpInventoryWarehouse,on_hand:x.total,available:x.available,dos15:value(x.periods[0],x),dos21:value(x.periods[1],x),dos30:value(x.periods[2],x),alert:labels[x.status]})));
+   el('invExport').onclick=()=>erpDownload('inventory',list.map(x=>({sku:x.p.sku,ean:x.p.ean,product_description:x.p.product_description,model:x.p.model,color:x.p.color,storage_version:x.p.storage_version,warehouse:erpInventoryWarehouse,on_hand:x.total,available:x.available,dos15:value(x.periods[0],x),dos21:value(x.periods[1],x),dos30:value(x.periods[2],x),alert:labels[x.status]})));
   }
   draw();
  }catch(e){if(stamp===erpLoading&&erpSelectedPage==='inventory')root.innerHTML='<div class="erp-blocked">'+erpEsc(errorMessage(e))+'</div>';}
