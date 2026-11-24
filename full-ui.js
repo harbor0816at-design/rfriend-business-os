@@ -208,6 +208,7 @@ function erpBindDetail(rows,table){
    '<dt>'+erpEsc(ERP_LABELS[k]||k)+'</dt><dd>'+erpEsc(erpValue(v,k))+'</dd>').join('')+'</dl>'+workflow,
    ERP_MODULES[erpSelectedPage]?.title||table);
   erpAttachPurchaseActions(modal,table,row);
+  erpAttachServiceActions(modal,table,row);
   modal.querySelector('#erpStateForm')?.addEventListener('submit',async e=>{
    e.preventDefault();const body=Object.fromEntries(new FormData(e.target));
    const btn=e.target.querySelector('[type=submit]'),status=modal.querySelector('#erpStatusMsg');btn.disabled=true;
@@ -268,6 +269,62 @@ function erpAttachPurchaseActions(modal,table,row){
   };
  }
 }
+function erpRefundCreate(){
+ const m=erpModal('<form id="erpRefundForm"><p>申请仅进入 ERP 退款审批流程，提交后不会调用支付平台或向客户打款。</p>'+
+ '<div class="erp-fields"><div class="erp-field"><label>订单 UUID</label><input name="order" required></div>'+
+ '<div class="erp-field"><label>退货单 UUID（可选）</label><input name="return_id"></div>'+
+ '<div class="erp-field"><label>退款金额 EUR</label><input name="amount" min="0.01" step="0.01" type="number" required></div></div>'+
+ '<div class="erp-actions" style="margin-top:16px"><button type="submit" class="primary">提交退款申请</button></div><p id="erpRefundFeedback"></p></form>','发起退款申请');
+ m.querySelector('#erpRefundForm').onsubmit=async e=>{
+  e.preventDefault();const form=Object.fromEntries(new FormData(e.target));
+  const status=m.querySelector('#erpRefundFeedback'),btn=e.target.querySelector('button');btn.disabled=true;
+  try{
+   await authorized('/rest/v1/rpc/rfriend_erp_refund_request',{method:'POST',
+    body:{p_order_id:form.order,p_return_id:form.return_id||null,p_amount_eur:Number(form.amount)}});
+   status.textContent='退款申请已登记，等待财务复核。';status.style.color='#128257';ERP_CACHE.delete('refunds');ERP_CACHE.delete('returns');
+  }catch(err){status.textContent=errorMessage(err);status.style.color='#b03432'}finally{btn.disabled=false}
+ };
+}
+function erpAttachServiceActions(modal,table,row){
+ if(table==='tickets'&&row.id&&['admin','operations','support'].includes(profile?.role)){
+  const area=document.createElement('div');
+  area.innerHTML='<section style="margin-top:20px"><h3>新增售后跟进记录</h3>'+
+   '<form id="erpTicketNote"><textarea name="note" required placeholder="客户反馈、技术排查进展、下一步跟进安排…" style="width:100%;min-height:90px;padding:10px;border:1px solid #d9e2dc;border-radius:8px"></textarea>'+
+   '<div class="erp-actions" style="margin-top:12px"><button type="submit" class="primary">保存跟进记录</button></div><p id="erpTicketNoteStatus"></p></form></section>';
+  modal.querySelector('.erp-modal-body').appendChild(area);
+  area.querySelector('#erpTicketNote').onsubmit=async e=>{
+   e.preventDefault();const note=new FormData(e.target).get('note'),status=area.querySelector('#erpTicketNoteStatus');
+   const btn=e.target.querySelector('button');btn.disabled=true;
+   try{
+    await authorized('/rest/v1/rpc/rfriend_erp_ticket_comment',{method:'POST',body:{p_ticket_id:row.id,p_body:note}});
+    status.textContent='跟进已记录到真实工单事件流水。';status.style.color='#128257';
+    e.target.reset();ERP_CACHE.delete('ticket_events');
+   }catch(err){status.textContent=errorMessage(err);status.style.color='#b03432'}
+   finally{btn.disabled=false}
+  };
+ }
+ if(table==='refunds'&&row.id&&['admin','finance'].includes(profile?.role)){
+  const statusOptions={requested:['approved','cancelled'],approved:['submitted','cancelled'],
+   submitted:['paid','failed'],failed:['approved']}[row.status]||[];
+  if(!statusOptions.length)return;
+  const area=document.createElement('div');
+  area.innerHTML='<section style="margin-top:20px"><h3>财务退款审核 / 回执登记</h3>'+
+   '<div class="erp-blocked">本操作只记录财务审批状态；只有实际支付平台确认资金退还后，才能选择 paid 并填写退款交易号。申请人与批准人不能相同。</div>'+
+   '<form id="erpRefundAdvance"><div class="erp-fields">'+
+   '<div class="erp-field"><label>下一状态</label><select name="status">'+statusOptions.map(k=>'<option>'+k+'</option>').join('')+'</select></div>'+
+   '<div class="erp-field"><label>支付平台退款流水号（paid 时必填）</label><input name="reference"></div></div>'+
+   '<div class="erp-actions" style="margin-top:12px"><button type="submit" class="primary">确认财务状态</button></div><p id="erpRefundAdvanceStatus"></p></form></section>';
+  modal.querySelector('.erp-modal-body').appendChild(area);
+  area.querySelector('#erpRefundAdvance').onsubmit=async e=>{
+   e.preventDefault();const vals=Object.fromEntries(new FormData(e.target)),status=area.querySelector('#erpRefundAdvanceStatus'),btn=e.target.querySelector('button');btn.disabled=true;
+   try{
+    await authorized('/rest/v1/rpc/rfriend_erp_refund_advance',{method:'POST',
+     body:{p_refund_id:row.id,p_status:vals.status,p_payment_reference:vals.reference||null}});
+    status.textContent='退款台账状态已更新：'+vals.status;status.style.color='#128257';ERP_CACHE.delete('refunds');ERP_CACHE.delete('returns');
+   }catch(err){status.textContent=errorMessage(err);status.style.color='#b03432'}finally{btn.disabled=false}
+  };
+ }
+}
 function erpTitle(id){return ERP_NAV.find(x=>x[0]===id)?.[lang==='en'?3:2]||'经营总览'}
 async function erpOpenCreate(entity){
  const defs=ERP_FIELDS[entity];if(!defs){erpModal('<p>该模块的创建动作尚未开放服务端接口。</p>');return}
@@ -308,7 +365,8 @@ async function erpRenderModule(){
  '<div class="erp-toolbar"><input id="erpSearch" placeholder="搜索当前表的关键字…" value="'+erpEsc(erpSearch)+'">'+
  '<button id="erpSearchRun">搜索</button><button id="erpReload">刷新数据</button>'+
  '<button id="erpExport">↓ 导出 CSV</button><button id="erpBulk">⇪ 批量导入</button>'+
- (ERP_CREATE[slug]===erpTab?'<button class="primary" id="erpAdd">＋ 新建</button>':'')+
+ (ERP_FIELDS[erpTab]?'<button class="primary" id="erpAdd">＋ 新建</button>':'')+
+ (erpTab==='refunds'?'<button class="primary" id="erpRequestRefund">＋ 申请退款</button>':'')+
  (slug==='shipping'&&erpTab==='shipments'?'<button class="primary" id="erpManualShipment">＋ 手工发货</button>':'')+
  (slug==='team'&&erpTab==='staff_roles'&&profile?.role==='admin'?'<button class="primary" id="erpStaffEdit">＋ 授予员工权限</button>':'')+
  '</div><div id="erpRecords"><p class="erp-empty">正在从 Supabase 读取…</p></div>','数据源：erp.'+erpTab+' · 角色：'+(profile?.role||'-'));
@@ -317,6 +375,7 @@ async function erpRenderModule(){
  document.querySelector('#erpSearch').onkeydown=e=>{if(e.key==='Enter'){erpSearch=e.target.value.trim();erpOffset=0;erpDrawRows()}};
  document.querySelector('#erpReload').onclick=()=>{ERP_CACHE.delete(erpTab);erpDrawRows()};
  document.querySelector('#erpAdd')?.addEventListener('click',()=>erpOpenCreate(erpTab));
+ document.querySelector('#erpRequestRefund')?.addEventListener('click',()=>erpRefundCreate());
  document.querySelector('#erpManualShipment')?.addEventListener('click',()=>{
   const m=erpModal(shipmentView(),'手工发货 · 需仓库确认');bindPage();
  });
