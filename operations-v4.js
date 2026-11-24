@@ -273,7 +273,8 @@ async function returnsPage(){
    '退货质检确认合格后，只有原订单、单件数量、OPPO 品牌和 IMEI 可追溯的记录才自动转入二手机仓；不符合条件保持待核，不会重复入库。')+
    '<div class="cards" id="v4ReturnStats"></div>'+
    '<section class="panel"><h3>退货 / 换货 / 退款处理</h3><div id="v4ReturnsList">读取中…</div></section>'+
-   '<section class="panel"><h3>OPPO 二手机库存（退货流转后入账）</h3><div id="v4UsedList">读取中…</div></section>';
+   '<section class="panel"><h3>OPPO 二手机库存（退货流转后入账）</h3><div id="v4UsedList">读取中…</div></section>'+
+   '<section class="panel"><div class="erp-header"><h3>退款申请与处理状态</h3><button class="btn primary" id="v4RefundCreate">＋ 发起退款申请</button></div><div id="v4RefundList">读取中…</div></section>';
   try{
    const [returns,used,refunds]=await Promise.all(['returns_v4','used_devices','refunds'].map(k=>erpData(k,true)));
    if(!$('v4ReturnsList'))return;
@@ -287,6 +288,10 @@ async function returnsPage(){
      '<td>'+h(r.refund_status)+'</td><td>'+r.item_lines+'</td>'+
      '<td>'+(['admin','operations','warehouse'].includes(role())?
       '<button class="btn v4ReturnLines" data-i="'+i+'">明细 / IMEI</button> <button class="btn v4InspectReturn" data-i="'+i+'">质检</button> <button class="btn v4FinalizeReturn" data-i="'+i+'">验证流转</button>':'只读')+'</td></tr>'));
+   $('v4RefundList').innerHTML=table(['订单 UUID','退款金额','退款状态','支付回执','申请时间'],
+    refunds.map(x=>'<tr><td>'+h(x.order_id)+'</td><td>'+h(eur(x.amount_eur))+'</td><td>'+h(x.status)+'</td>'+
+     '<td>'+h(x.payment_reference||'未完成')+'</td><td>'+h(erpDate(x.created_at))+'</td></tr>'));
+   $('v4RefundCreate')?.addEventListener('click',()=>erpRefundCreate());
    $('v4UsedList').innerHTML=table(['IMEI','品牌','型号','颜色','内存','等级','状态','来源'],
     used.filter(x=>String(x.brand).toUpperCase()==='OPPO').map(x=>'<tr><td>'+h(x.imei)+'</td><td>'+h(x.brand)+'</td><td>'+h(x.model)+'</td>'+
     '<td>'+h(x.color||'待核')+'</td><td>'+h(x.storage_variant||'待核')+'</td><td>'+h(x.grade)+'</td>'+
