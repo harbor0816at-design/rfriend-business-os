@@ -21,16 +21,60 @@ const ERP_NAV=[
  ['team','♧','员工与角色','Employees & roles'],
  ['imei','⌗','串码识别','IMEI recognition']
 ];
+// Navigation structure strictly follows the user-approved Business OS v3 HTML.
 const ERP_GROUPS=[
- ['desk','工作台','Workspace',['dashboard','tasks']],
- ['sales','销售与履约','Sales & Fulfillment',['orders','intake','shipping']],
- ['supply','商品与供应链','Products & Supply Chain',['products','purchase','inventory','movements','imei']],
- ['service','售后与二手','Service & Used Devices',['tickets','returns','used']],
- ['finance','财务','Finance',['finance']],
- ['analytics','数据分析','Analytics',['reports']],
- ['system','系统管理','Administration',['team','audit','settings']]
+ ['workspace','工作台','Workspace',['dashboard','tasks']],
+ ['sales','销售与履约','Sales & Fulfillment',['intake','orders','shipping']],
+ ['stock','采购与库存','Procurement & Inventory',['purchase','products','inventory','movements','imei','used']],
+ ['service','客户服务','Customer Service',['tickets','returns']],
+ ['finance','财务管理','Finance',['finance']],
+ ['insights','分析与系统','Insights & Administration',['reports','audit','team','settings']]
 ];
-let erpOpenGroup='desk';
+const ERP_NAV_PREFS_KEY='rf_os_prod_nav_v3';
+const ERP_GROUP_KEY='rf_os_prod_nav_groups_v3';
+function erpReadPrefs(){
+ try{
+  const x=JSON.parse(localStorage.getItem(ERP_NAV_PREFS_KEY));
+  if(x&&Array.isArray(x.pinned)&&x.visits&&typeof x.visits==='object')
+   return {pinned:x.pinned.filter(k=>ERP_NAV.some(n=>n[0]===k)),visits:x.visits};
+ }catch(e){}
+ return {pinned:['dashboard','tasks','orders','tickets'],visits:{}};
+}
+let erpNavPrefs=erpReadPrefs();
+let erpGroupPrefs=(()=>{
+ try{const x=JSON.parse(localStorage.getItem(ERP_GROUP_KEY));return x&&typeof x==='object'?x:{}}catch(e){return {}}
+})();
+function erpSaveNavPrefs(){
+ localStorage.setItem(ERP_NAV_PREFS_KEY,JSON.stringify(erpNavPrefs));
+}
+function erpPinNav(key){
+ erpNavPrefs.pinned=erpNavPrefs.pinned.includes(key)?
+ erpNavPrefs.pinned.filter(x=>x!==key):[...erpNavPrefs.pinned,key];
+ erpSaveNavPrefs();erpRenderNav();
+}
+function erpToggleGroup(group){
+ erpGroupPrefs[group]=erpGroupPrefs[group]===false?true:false;
+ localStorage.setItem(ERP_GROUP_KEY,JSON.stringify(erpGroupPrefs));
+ erpRenderNav();
+}
+function erpQuickNavigate(){
+ const allowed=ERP_NAV.filter(x=>erpAllowed(x[0]));
+ const m=erpModal('<input class="control" id="erpQuickSearch" placeholder="搜索模块 / Search module" style="width:100%;padding:10px">'+
+ '<div class="quickgrid" id="erpQuickResults" style="margin-top:14px">'+allowed.map(([id,icon,cn,en])=>
+ '<button type="button" class="btn quicklink" data-search="'+erpEsc(cn+' '+en)+'" data-jump="'+id+'">'+
+ erpEsc(icon)+' '+erpEsc(lang==='en'?en:cn)+'</button>').join('')+'</div>'+
+ '<p class="erp-mini">★ 可在侧边栏置顶。其余模块按照访问频次排列。</p>',
+ '快速导航 / Quick jump');
+ const bind=()=>{
+  m.querySelectorAll('[data-jump]').forEach(btn=>btn.onclick=()=>{m.remove();erpNavigate(btn.dataset.jump)});
+ };
+ bind();
+ m.querySelector('#erpQuickSearch').oninput=e=>{
+  const q=e.target.value.trim().toLocaleLowerCase();
+  m.querySelectorAll('[data-jump]').forEach(btn=>btn.style.display=btn.dataset.search.toLocaleLowerCase().includes(q)?'':'none');
+ };
+ m.querySelector('#erpQuickSearch').focus();
+}
 const ERP_MODULES={
  products:{title:'商品管理',en:'Products',tables:[['products','商品目录'],['sku_dictionary','SKU 字典'],['product_keyword_rules','SKU 识别规则']]},
  movements:{title:'库存流水',en:'Stock movements',tables:[['inventory_movements','正式库存流水']]},
@@ -130,6 +174,8 @@ function erpBuildTopActions(){
  buttons.querySelector('#erpRestore').onclick=erpRestorePreview;
  buttons.querySelector('#erpBulkGlobal').onclick=()=>erpChooseAction('bulk');
  buttons.querySelector('#erpQuickAction').onclick=()=>erpChooseAction('new');
+ buttons.insertAdjacentHTML('afterbegin','<button id="erpGlobalQuickNav" class="btn">⌕ 快速导航</button>');
+ buttons.querySelector('#erpGlobalQuickNav').onclick=erpQuickNavigate;
 }
 async function erpBackup(){
  if(profile?.role!=='admin'){alert('仅管理员允许导出全业务数据。');return;}
@@ -175,45 +221,51 @@ function erpChooseAction(mode){
 }
 function erpBuildNav(){
  const root=document.querySelector('.sidebar');
- root.innerHTML='<div class="brand">Rfriend <span>OS</span><small>OPPO Austria · 进销存业务系统</small></div>'+
- '<div class="erp-toolbar"><input id="erpNavSearch" placeholder="快速导航 / Search…" style="width:100%;background:#21483a;color:#fff;border-color:#41614f"></div>'+
+ root.innerHTML='<div class="brand">Rfriend <span>OS</span><small>OPPO Austria · Business ERP v3</small></div>'+
+ '<div class="nav-search"><input id="erpNavSearch" aria-label="Search navigation" placeholder="快速导航 / Search…">'+
+ '<button id="erpNavQuick" title="Quick navigation">⌕</button></div>'+
  '<div id="erpNavGroups"></div>'+
- '<div class="erp-mini" style="margin:24px 12px;color:#a8c1b3">生产数据库 · Supabase Frankfurt<br>权限按员工角色控制</div>';
- document.querySelector('#erpNavSearch').addEventListener('input',erpRenderNav);
+ '<div class="erp-mini erp-prod-foot">真实生产数据 · Supabase Frankfurt<br>员工权限由服务端验证</div>';
+ root.querySelector('#erpNavSearch').addEventListener('input',erpRenderNav);
+ root.querySelector('#erpNavQuick').addEventListener('click',erpQuickNavigate);
  erpRenderNav();
 }
 function erpRenderNav(){
- const q=(document.querySelector('#erpNavSearch')?.value||'').trim().toLowerCase();
+ const q=(document.querySelector('#erpNavSearch')?.value||'').trim().toLocaleLowerCase();
  const root=document.querySelector('#erpNavGroups');if(!root)return;
- root.innerHTML=ERP_GROUPS.map(([id,zh,en,items])=>{
-  const allowed=ERP_NAV.filter(x=>items.includes(x[0])&&erpAllowed(x[0]));
-  const matching=allowed.filter(x=>(x[2]+' '+x[3]).toLowerCase().includes(q));
-  if(!allowed.length||q&&matching.length===0&&!(zh+' '+en).toLowerCase().includes(q))return '';
-  const visible=q?allowed.filter(x=>matching.includes(x)||(zh+' '+en).toLowerCase().includes(q)):allowed;
-  const opened=!!q||erpOpenGroup===id;
-  const hasSelected=allowed.some(x=>x[0]===erpSelectedPage);
-  return '<div class="erp-nav-section">'+
-   '<button class="erp-nav-group '+(hasSelected?'selected':'')+'" data-erp-group="'+id+'" aria-expanded="'+opened+'">'+
-    '<span>'+(lang==='zh'?zh:en)+'</span><span class="erp-nav-count">'+allowed.length+'</span><span class="erp-nav-chevron">'+(opened?'⌄':'›')+'</span></button>'+
-   (opened?'<div class="erp-nav-sub">'+visible.map(([key,icon,cn,english])=>
-     '<button class="nav '+(erpSelectedPage===key?'active':'')+'" data-erp-nav="'+key+'"><em>'+icon+'</em>'+(lang==='zh'?cn:english)+'</button>'
-   ).join('')+'</div>':'')+
-  '</div>';
- }).join('');
- root.querySelectorAll('[data-erp-group]').forEach(button=>button.addEventListener('click',()=>{
-  const id=button.dataset.erpGroup;
-  erpOpenGroup=erpOpenGroup===id?'':id;
-  erpRenderNav();
- }));
- root.querySelectorAll('[data-erp-nav]').forEach(button=>button.addEventListener('click',()=>erpNavigate(button.dataset.erpNav)));
+ const allowed=ERP_NAV.filter(x=>erpAllowed(x[0]));
+ const isMatch=x=>(x[2]+' '+x[3]).toLocaleLowerCase().includes(q);
+ const pinned=allowed.filter(x=>erpNavPrefs.pinned.includes(x[0])).filter(x=>!q||isMatch(x));
+ const navItem=([key,icon,zh,en])=>'<div class="navitem">'+
+ '<button class="nav '+(erpSelectedPage===key?'active':'')+'" data-erp-nav="'+key+'">'+
+ '<span class="nav-symbol">'+erpEsc(icon)+'</span>'+(lang==='zh'?erpEsc(zh):erpEsc(en))+'</button>'+
+ '<button class="pin '+(erpNavPrefs.pinned.includes(key)?'is-pinned':'')+'" data-erp-pin="'+key+'" title="'+
+ (lang==='zh'?'置顶 / 取消置顶':'Pin / unpin')+'">'+(erpNavPrefs.pinned.includes(key)?'★':'☆')+'</button></div>';
+ let html='';
+ if(pinned.length)html+='<div class="nav-group-title nav-favorites">★ '+(lang==='zh'?'常用功能':'Favorites')+'</div>'+
+ pinned.map(navItem).join('');
+ for(const [id,zh,en,items] of ERP_GROUPS){
+  const groupItems=allowed.filter(x=>items.includes(x[0])&&!erpNavPrefs.pinned.includes(x[0]));
+  const matching=groupItems.filter(x=>!q||isMatch(x));
+  if(!matching.length)continue;
+  matching.sort((a,b)=>(erpNavPrefs.visits[b[0]]||0)-(erpNavPrefs.visits[a[0]]||0)||
+   ERP_NAV.findIndex(x=>x[0]===a[0])-ERP_NAV.findIndex(x=>x[0]===b[0]));
+  const open=!!q||erpGroupPrefs[id]!==false||matching.some(x=>x[0]===erpSelectedPage);
+  html+='<button class="nav-group-title nav-group-toggle" data-erp-group="'+id+'" aria-expanded="'+open+'">'+
+   '<span>'+(lang==='zh'?erpEsc(zh):erpEsc(en))+'</span><span>'+(open?'⌄':'›')+'</span></button>';
+  if(open)html+=matching.map(navItem).join('');
+ }
+ root.innerHTML=html||'<div class="nav-nothing">'+(lang==='zh'?'没有匹配的功能':'No matching feature')+'</div>';
+ root.querySelectorAll('[data-erp-group]').forEach(btn=>btn.onclick=()=>erpToggleGroup(btn.dataset.erpGroup));
+ root.querySelectorAll('[data-erp-nav]').forEach(btn=>btn.onclick=()=>erpNavigate(btn.dataset.erpNav));
+ root.querySelectorAll('[data-erp-pin]').forEach(btn=>btn.onclick=()=>erpPinNav(btn.dataset.erpPin));
 }
 function erpNavigate(pageId){
  if(!erpAllowed(pageId))return;
- erpSelectedPage=pageId;
- const group=ERP_GROUPS.find(x=>x[3].includes(pageId));
- if(group)erpOpenGroup=group[0];
- erpTab='';erpSearch='';erpOffset=0;
- erpRenderNav();render();
+ erpSelectedPage=pageId;erpTab='';erpSearch='';erpOffset=0;
+ erpNavPrefs.visits[pageId]=(erpNavPrefs.visits[pageId]||0)+1;
+ erpSaveNavPrefs();erpRenderNav();render();
+ window.scrollTo({top:0,behavior:'smooth'});
 }
 function erpPanel(title,content,subtitle=''){
  return '<section class="panel"><div class="erp-header"><div><h3>'+erpEsc(title)+'</h3>'+(subtitle?'<div class="erp-sub">'+erpEsc(subtitle)+'</div>':'')+'</div></div>'+content+'</section>';
