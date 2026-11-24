@@ -17,7 +17,7 @@ async function request(path,{method='GET',body,auth=true}={}){
  if(body!==undefined)headers['Content-Type']='application/json';
  const response=await fetch(API+path,{method,headers,body:body===undefined?undefined:JSON.stringify(body)});
  let data;try{data=await response.json()}catch{data=null}
- if(!response.ok)throw new Error(data?.message||data?.error_description||data?.error||'HTTP '+response.status);
+ if(!response.ok)throw new Error(data?.message||data?.error_description||data?.msg||data?.error||data?.code||'HTTP '+response.status);
  return data;
 }
 async function refreshSession(){
