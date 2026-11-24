@@ -147,6 +147,107 @@ async function loadData(){
   render();
  }catch(err){notice(errorMessage(err),true);el('content').innerHTML='<section class="panel">'+t('数据库加载失败，请检查登录或后端权限。','Database loading failed; verify authentication and API access.')+'</section>';}
 }
+
+// PASSWORD RECOVERY: Auth verifies recovery token; no service role or privileged endpoint is used.
+let recoveryAccessToken=null;
+function authScreen(which){
+ for(const id of ['loginForm','forgotForm','resetForm'])el(id).classList.toggle('hidden',id!==which);
+ el('login').classList.remove('hidden');
+ el('app').classList.add('hidden');
+}
+function authStatus(id,message,isError=false){
+ const node=el(id);node.textContent=message;node.className='status-message '+(isError?'error':'success');
+}
+function clearRecovery(){
+ recoveryAccessToken=null;
+ el('newPassword').value='';el('confirmPassword').value='';
+ el('changePasswordBtn').disabled=true;
+}
+async function startRecovery(email){
+ // The redirect must be in Supabase Auth > URL Configuration > Redirect URLs.
+ const destination=new URL(window.location.pathname,window.location.origin);
+ destination.searchParams.set('action','reset-password');
+ return request('/auth/v1/recover?redirect_to='+encodeURIComponent(destination.toString()),{
+  method:'POST',body:{email},auth:false
+ });
+}
+async function acceptRecoveryLink(){
+ const hash=new URLSearchParams(window.location.hash.replace(/^#/,'')); 
+ const query=new URLSearchParams(window.location.search);
+ if(!hash.has('access_token')&&!hash.has('error')&&query.get('action')!=='reset-password')return false;
+ const recoveryType=hash.get('type');
+ const access=hash.get('access_token');
+ // Clear tokens from the URL immediately; never save the recovery session to browser storage.
+ window.history.replaceState({},document.title,window.location.pathname);
+ authScreen('resetForm');
+ if(hash.has('error')){
+  authStatus('resetStatus',hash.get('error_description')||'恢复链接无效或已过期，请重新发送。',true);
+  return true;
+ }
+ if(recoveryType!=='recovery'||!access){
+  authStatus('resetStatus','没有收到有效的恢复凭据。请重新发送密码重置邮件。',true);
+  return true;
+ }
+ try{
+  const response=await fetch(API+'/auth/v1/user',{headers:{apikey:KEY,Authorization:'Bearer '+access}});
+  if(!response.ok)throw new Error('恢复凭据已失效，请重新申请密码重置邮件。');
+  recoveryAccessToken=access;
+  el('changePasswordBtn').disabled=false;
+  authStatus('resetStatus','邮箱已验证，请设置新密码。');
+ }catch(err){authStatus('resetStatus',errorMessage(err),true)}
+ return true;
+}
+async function saveRecoveryPassword(password){
+ if(!recoveryAccessToken)throw new Error('恢复链接无效或已过期。');
+ const response=await fetch(API+'/auth/v1/user',{
+  method:'PUT',headers:{apikey:KEY,Authorization:'Bearer '+recoveryAccessToken,'Content-Type':'application/json'},
+  body:JSON.stringify({password})
+ });
+ const data=await response.json().catch(()=>({}));
+ if(!response.ok)throw new Error(data?.msg||data?.message||data?.error_description||data?.error||'HTTP '+response.status);
+ clearRecovery();
+ // A fresh password login is required. Never turn a recovery token into an ERP session.
+ sessionStorage.removeItem(storageKey);
+ token=null;refreshToken=null;profile=null;
+ return data;
+}
+el('forgotBtn').addEventListener('click',()=>{
+ el('recoveryEmail').value=el('email').value||'';
+ el('forgotStatus').textContent='';
+ authScreen('forgotForm');
+});
+el('backToLogin').addEventListener('click',()=>authScreen('loginForm'));
+el('resetBackToLogin').addEventListener('click',()=>{clearRecovery();authScreen('loginForm')});
+el('forgotForm').addEventListener('submit',async e=>{
+ e.preventDefault();const button=el('sendRecoveryBtn');button.disabled=true;
+ authStatus('forgotStatus','正在发送重置邮件…');
+ try{
+  await startRecovery(el('recoveryEmail').value.trim());
+  authStatus('forgotStatus','若该邮箱存在且允许接收恢复邮件，你将收到密码重置链接。请检查收件箱及垃圾邮件。');
+ }catch(err){
+  // Do not disclose whether an email account exists.
+  const message=errorMessage(err);
+  authStatus('forgotStatus',/rate|limit|smtp|email|redirect|429/i.test(message)?
+    '暂时无法发送恢复邮件，可能是发送频率限制或 Supabase 邮件设置。请稍后重试或联系管理员。':
+    '发送失败，请检查网络或联系管理员。',true);
+ }finally{button.disabled=false;}
+});
+el('resetForm').addEventListener('submit',async e=>{
+ e.preventDefault();
+ const pass=el('newPassword').value,verify=el('confirmPassword').value;
+ if(pass.length<12){authStatus('resetStatus','密码至少需要 12 个字符。',true);return}
+ if(pass!==verify){authStatus('resetStatus','两次输入的密码不一致。',true);return}
+ const button=el('changePasswordBtn');button.disabled=true;
+ try{
+  await saveRecoveryPassword(pass);
+  authScreen('loginForm');el('password').value='';
+  el('loginError').textContent='密码修改成功，请使用新密码登录。';
+ }catch(err){
+  authStatus('resetStatus',errorMessage(err),true);
+  button.disabled=!recoveryAccessToken;
+ }
+});
+
 el('loginForm').addEventListener('submit',async e=>{
  e.preventDefault();el('loginError').textContent='';el('loginBtn').disabled=true;
  try{await signIn(el('email').value.trim(),el('password').value);await loadData()}
@@ -157,4 +258,4 @@ el('logoutBtn').addEventListener('click',signOut);
 el('refreshBtn').addEventListener('click',loadData);
 el('lang').addEventListener('change',e=>{lang=e.target.value;render();});
 document.querySelectorAll('[data-page]').forEach(button=>button.addEventListener('click',()=>{page=button.dataset.page;render();}));
-(async()=>{try{const session=JSON.parse(sessionStorage.getItem(storageKey)||'null');if(session?.refreshToken){refreshToken=session.refreshToken;await refreshSession();await loadProfile();await loadData();}}catch(err){signOut();}})();
+(async()=>{try{if(await acceptRecoveryLink())return;const session=JSON.parse(sessionStorage.getItem(storageKey)||'null');if(session?.refreshToken){refreshToken=session.refreshToken;await refreshSession();await loadProfile();await loadData();}}catch(err){signOut();}})();
