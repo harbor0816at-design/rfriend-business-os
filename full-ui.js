@@ -119,9 +119,9 @@ const ERP_CREATE={
 const ERP_COLUMNS={
  staff_roles:['email','role','active','created_at'],
  orders:['external_order_id','channel_code','ordered_at','customer_name','order_status','total_eur'],
- products:['sku','name','category','ean','cost_eur','price_eur'],
- stock_balances:['warehouse_id','product_id','quality_status','on_hand','reserved'],
- inventory_movements:['created_at','warehouse_id','product_id','quantity_delta','reason'],
+ products:['sku','ean','product_description','category','cost_eur','price_eur'],
+ stock_balances:['sku','ean','product_description','warehouse_name','quality_status','on_hand','reserved'],
+ inventory_movements:['sku','ean','product_description','created_at','warehouse_name','quantity_delta','reason'],
  purchase_orders:['po_number','supplier','status','warehouse_id','created_at'],
  shipments:['shipment_number','carrier','tracking_number','status','shipped_at'],
  returns:['rma_number','order_id','type','return_status','inspection_status','reason'],
@@ -140,7 +140,7 @@ const ERP_COLUMNS={
  report_sales_by_month:['sales_month','channel_code','recorded_orders','order_face_value_eur','delivered_orders'],
  report_order_stage_kpis:['channel_code','total_orders','pending','shipped','delivered','order_face_value_eur']
 };
-const ERP_LABELS={email:'邮箱',id:'ID',external_order_id:'外部订单号',channel_code:'渠道',ordered_at:'下单时间',created_at:'创建时间',updated_at:'更新时间',customer_name:'客户姓名',order_status:'订单状态',total_eur:'金额 EUR',sku:'SKU',name:'名称',title:'标题',category:'分类',ean:'EAN',price_eur:'售价 EUR',cost_eur:'成本 EUR',low_stock_threshold:'低库存阈值',warehouse_id:'仓库 ID',product_id:'商品 ID',on_hand:'库存数量',reserved:'预留数量',quality_status:'质量状态',quantity_delta:'变动数量',reason:'原因',po_number:'采购单号',supplier:'供应商',status:'状态',shipment_number:'发货单号',carrier:'承运商',tracking_number:'物流单号',shipped_at:'发货时间',rma_number:'RMA 单号',return_status:'退换状态',inspection_status:'质检状态',ticket_number:'工单编号',priority:'优先级',payment_reference:'付款凭证',invoice_number:'发票号码',invoice_type:'发票类型',amount_eur:'金额 EUR',vat_eur:'VAT',brand:'品牌',model:'型号',grade:'成色',imei:'IMEI',task_type:'任务类型',assigned_role:'负责部门',due_at:'截止时间',source_sheet:'源表',source_status:'来源状态',product_family:'商品系列',validation_state:'数据验证',recorded_orders:'订单数量',sales_month:'月份',order_face_value_eur:'订单面额',delivered_orders:'签收订单',action:'操作',actor_id:'操作员',entity_type:'业务实体',entity_id:'关联 ID',user_id:'员工 ID',role:'角色',active:'启用',allowed_modules:'允许模块'};
+const ERP_LABELS={product_description:'产品名称描述',warehouse_name:'仓库',warehouse_code:'仓库编码',email:'邮箱',id:'ID',external_order_id:'外部订单号',channel_code:'渠道',ordered_at:'下单时间',created_at:'创建时间',updated_at:'更新时间',customer_name:'客户姓名',order_status:'订单状态',total_eur:'金额 EUR',sku:'SKU',name:'名称',title:'标题',category:'分类',ean:'EAN',price_eur:'售价 EUR',cost_eur:'成本 EUR',low_stock_threshold:'低库存阈值',warehouse_id:'仓库 ID',product_id:'商品 ID',on_hand:'库存数量',reserved:'预留数量',quality_status:'质量状态',quantity_delta:'变动数量',reason:'原因',po_number:'采购单号',supplier:'供应商',status:'状态',shipment_number:'发货单号',carrier:'承运商',tracking_number:'物流单号',shipped_at:'发货时间',rma_number:'RMA 单号',return_status:'退换状态',inspection_status:'质检状态',ticket_number:'工单编号',priority:'优先级',payment_reference:'付款凭证',invoice_number:'发票号码',invoice_type:'发票类型',amount_eur:'金额 EUR',vat_eur:'VAT',brand:'品牌',model:'型号',grade:'成色',imei:'IMEI',task_type:'任务类型',assigned_role:'负责部门',due_at:'截止时间',source_sheet:'源表',source_status:'来源状态',product_family:'商品系列',validation_state:'数据验证',recorded_orders:'订单数量',sales_month:'月份',order_face_value_eur:'订单面额',delivered_orders:'签收订单',action:'操作',actor_id:'操作员',entity_type:'业务实体',entity_id:'关联 ID',user_id:'员工 ID',role:'角色',active:'启用',allowed_modules:'允许模块'};
 const ERP_CACHE=new Map();
 let erpCurrentUserIdentity=null;
 let erpSelectedPage='dashboard',erpTab='',erpSearch='',erpOffset=0,erpRow=null,erpLoading=0;
@@ -301,7 +301,7 @@ async function erpData(name,refresh=false){
  }
  const view=ERP_VIEWS[name]||'rfriend_erp_'+name;
  const orderBy={
-  stock_balances:'warehouse_id.asc,product_id.asc,quality_status.asc',
+  stock_balances:'warehouse_id.asc,product_id.asc,quality_status.asc',inventory_dos:'product_id.asc,lookback_days.asc',
   channels:'code.asc',warehouses:'code.asc',role_definitions:'code.asc',
   source_logistics_evidence:'source_record_id.asc',
   source_product_matches:'source_record_id.asc',
@@ -720,6 +720,42 @@ const ERP_DESCRIPTIONS={
  finance:'退款、发票与待办',reports:'销售、库存、采购、售后与导出',audit:'业务状态变更记录',
  settings:'渠道、仓库、数据',team:'员工账号与角色权限',imei:'上传、识别、人工校正'
 };
+let erpInventoryWarehouse='all',erpInventoryQuery='',erpInventoryAlert='all';
+async function erpInventoryPage(){
+ const root=el('content');
+ const stamp=++erpLoading;
+ root.innerHTML='<div class="erp-panel">正在读取真实库存与销售订单…</div>';
+ try{
+  const [products,stock,dos,depots]=await Promise.all(['products','stock_balances','inventory_dos','warehouses'].map(k=>erpData(k,true)));
+  if(stamp!==erpLoading||erpSelectedPage!=='inventory')return;
+  const labels={out_of_stock:'缺货',low_stock:'低于安全库存',critical:'严重不足',warning:'库存不足',watch:'库存关注',normal:'正常',no_sales:'无动销',sales_data_incomplete:'数据不足'};
+  const h=erpEsc, num=v=>Number(v)||0;
+  const opts=[['all','全部仓库'],...depots.map(w=>[w.code,w.name])];
+  function draw(){
+   const scope=stock.filter(x=>erpInventoryWarehouse==='all'||x.warehouse_code===erpInventoryWarehouse);
+   const sums=scope.reduce((a,x)=>{a.total+=num(x.on_hand);if(x.quality_status==='sellable')a.available+=num(x.on_hand)-num(x.reserved);else a.other+=num(x.on_hand);return a},{total:0,available:0,other:0});
+   const coverage=[15,21,30].map(n=>{let d=dos.find(x=>x.lookback_days===n);return n+'天 '+(d?.itemized_orders??0)+'/'+(d?.eligible_orders??0)}).join(' · ');
+   const list=products.filter(p=>p.is_active!==false).map(p=>{
+    const rows=scope.filter(x=>x.product_id===p.id),total=rows.reduce((a,x)=>a+num(x.on_hand),0),available=rows.filter(x=>x.quality_status==='sellable').reduce((a,x)=>a+num(x.on_hand)-num(x.reserved),0);
+    const periods=[15,21,30].map(n=>dos.find(x=>x.product_id===p.id&&x.lookback_days===n));
+    const d=periods[2];const status=available===0?'out_of_stock':(p.low_stock_threshold>0&&available<=p.low_stock_threshold?'low_stock':d?.alert_status||'sales_data_incomplete');
+    return {p,total,available,periods,status};
+   }).filter(x=>(x.p.sku+' '+(x.p.ean||'')+' '+x.p.product_description).toLowerCase().includes(erpInventoryQuery.toLowerCase())&&(erpInventoryAlert==='all'||x.status===erpInventoryAlert));
+   const value=(d,x)=>d&&num(d.sales_units)>0?(erpInventoryWarehouse==='all'?d.dos:(x.available*num(d.lookback_days)/num(d.sales_units)).toFixed(1)):'—';
+   root.innerHTML=cards([['实物库存',sums.total],['全新可用',sums.available],['不可售 / 开箱',sums.other],['缺货 SKU',list.filter(x=>x.status==='out_of_stock').length]])+
+    '<div class="message warn">DOS = 可用库存 ÷ 全渠道已匹配订单日均量。分仓 DOS 使用同一全渠道销量，仅代表该仓对全渠道需求的支撑能力；匹配不完整时 DOS 可能偏高。订单匹配覆盖：'+h(coverage)+'</div>'+
+    erpPanel('分仓库存 / DOS 预警','<div class="erp-toolbar"><select id="invWarehouse">'+opts.map(([v,n])=>'<option value="'+h(v)+'" '+(v===erpInventoryWarehouse?'selected':'')+'>'+h(n)+'</option>').join('')+'</select><input id="invSearch" placeholder="SKU / EAN / 产品名称描述" value="'+h(erpInventoryQuery)+'"><select id="invAlert"><option value="all">全部预警</option>'+Object.entries(labels).map(([v,n])=>'<option value="'+v+'" '+(erpInventoryAlert===v?'selected':'')+'>'+n+'</option>').join('')+'</select><button id="invRun">查询</button><button id="invReload">刷新</button><button id="invExport">导出 CSV</button></div>'+
+    '<div class="tablewrap"><table><thead><tr>'+['SKU','EAN','产品名称描述','实物库存','可用库存','DOS 15','DOS 21','DOS 30','预警','30天建议补货(估计)'].map(x=>'<th>'+x+'</th>').join('')+'</tr></thead><tbody>'+list.map(x=>'<tr>'+[x.p.sku,x.p.ean||'待维护',x.p.product_description,x.total,x.available,...x.periods.map(d=>value(d,x)),labels[x.status],x.periods[2]?.sales_units>0&&erpInventoryWarehouse==='all'?x.periods[2].suggested_replenishment_30d:'—'].map(v=>'<td>'+h(v??'—')+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>','已展示 '+list.length+' 个商品');
+   el('invWarehouse').onchange=e=>{erpInventoryWarehouse=e.target.value;draw()};
+   el('invAlert').onchange=e=>{erpInventoryAlert=e.target.value;draw()};
+   el('invRun').onclick=()=>{erpInventoryQuery=el('invSearch').value;draw()};
+   el('invSearch').onkeydown=e=>{if(e.key==='Enter'){erpInventoryQuery=e.target.value;draw()}};
+   el('invReload').onclick=erpInventoryPage;
+   el('invExport').onclick=()=>erpDownload('inventory',list.map(x=>({sku:x.p.sku,ean:x.p.ean,product_description:x.p.product_description,warehouse:erpInventoryWarehouse,on_hand:x.total,available:x.available,dos15:value(x.periods[0],x),dos21:value(x.periods[1],x),dos30:value(x.periods[2],x),alert:labels[x.status]})));
+  }
+  draw();
+ }catch(e){if(stamp===erpLoading&&erpSelectedPage==='inventory')root.innerHTML='<div class="erp-blocked">'+erpEsc(errorMessage(e))+'</div>';}
+}
 async function erpRenderPage(){
  if(!profile)return;
  const identity=String(profile.user_id)+'|'+String(profile.role);
@@ -727,6 +763,7 @@ async function erpRenderPage(){
  erpRenderNav();el('heading').textContent=erpTitle(erpSelectedPage);
  if(el('subtitle'))el('subtitle').textContent=lang==='en'?(ERP_MODULES[erpSelectedPage]?.en||'Operations'):ERP_DESCRIPTIONS[erpSelectedPage]||'真实 ERP 数据';
  if(erpSelectedPage==='dashboard'){await erpDashboard();return}
+ if(erpSelectedPage==='inventory'){await erpInventoryPage();return}
  if(!ERP_MODULES[erpSelectedPage])return;
  await erpRenderModule();
  if(erpSelectedPage==='settings')erpSettingsExtras();
