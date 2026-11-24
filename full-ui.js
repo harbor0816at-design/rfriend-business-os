@@ -502,7 +502,10 @@ async function erpOpenCreate(entity){
   const status=modal.querySelector('#erpCreateStatus');const button=form.querySelector('[type=submit]');button.disabled=true;
   try{const result=await authorized('/rest/v1/rpc/rfriend_erp_create_record',{method:'POST',body:{p_entity:entity,p_payload:payload}});
    status.textContent='创建成功：'+(result?.id||result?.record_id||JSON.stringify(result));status.style.color='#127347';
-   ERP_CACHE.delete(entity);erpRenderPage();
+   ERP_CACHE.delete(entity);
+   if(entity==='orders'){
+    orders=[];await loadData();
+   }else await erpRenderPage();
   }catch(err){status.textContent='无法创建：'+errorMessage(err);status.style.color='#b03432';}finally{button.disabled=false}
  };
 }
