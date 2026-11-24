@@ -20,16 +20,33 @@ async function request(path,{method='GET',body,auth=true}={}){
  if(!response.ok)throw new Error(data?.message||data?.error_description||data?.msg||data?.error||data?.code||'HTTP '+response.status);
  return data;
 }
+let refreshInFlight=null;
+let sessionGeneration=0;
 async function refreshSession(){
+ if(refreshInFlight)return refreshInFlight;
  if(!refreshToken)throw new Error('No refresh token');
- const data=await request('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:{refresh_token:refreshToken},auth:false});
- token=data.access_token;refreshToken=data.refresh_token;
- sessionStorage.setItem(storageKey,JSON.stringify({token,refreshToken}));
+ const generation=sessionGeneration;
+ const previous=refreshToken;
+ const work=(async()=>{
+  const data=await request('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:{refresh_token:previous},auth:false});
+  if(generation!==sessionGeneration)throw new Error('Session changed');
+  token=data.access_token;refreshToken=data.refresh_token;
+  sessionStorage.setItem(storageKey,JSON.stringify({token,refreshToken}));
+ })();
+ refreshInFlight=work;
+ try{return await work}finally{if(refreshInFlight===work)refreshInFlight=null;}
 }
 async function authorized(path,opts={}){
+ const attempted=token;
+ const generation=sessionGeneration;
  try{return await request(path,opts)}
  catch(e){
-  if(refreshToken&&/jwt|expired|token/i.test(errorMessage(e))){await refreshSession();return request(path,opts)}
+  if(generation!==sessionGeneration)throw new Error('Session changed');
+  if(refreshToken&&/jwt|expired|token/i.test(errorMessage(e))){
+   if(token===attempted)await refreshSession();
+   if(generation!==sessionGeneration)throw new Error('Session changed');
+   return request(path,opts);
+  }
   throw e;
  }
 }
@@ -42,12 +59,14 @@ async function loadProfile(){
  el('app').classList.remove('hidden');
 }
 async function signIn(email,password){
+ sessionGeneration++;refreshInFlight=null;
  const result=await request('/auth/v1/token?grant_type=password',{method:'POST',body:{email,password},auth:false});
  token=result.access_token;refreshToken=result.refresh_token;
  await loadProfile();
  sessionStorage.setItem(storageKey,JSON.stringify({token,refreshToken}));
 }
 function signOut(){
+ sessionGeneration++;refreshInFlight=null;
  sessionStorage.removeItem(storageKey);token=null;refreshToken=null;profile=null;
  orders=[];monthly=[];tasks=[];warehouses=[];shipments=[];
  el('app').classList.add('hidden');el('login').classList.remove('hidden');el('password').value='';
