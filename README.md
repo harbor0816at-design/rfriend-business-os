@@ -1,6 +1,17 @@
 # Rfriend Business OS — OPPO Austria ERP
 
-Production-linked ERP for Rfriend Services GmbH, based on the user's **approved Business OS v5 visual design**.
+Production-linked ERP for Rfriend Services GmbH, based on the user's **final approved Business OS v3 HTML (`index (3).html`)**; it is a visual source of truth, not a database runtime.
+
+## Production UI — accepted v3 layout
+
+The final UI follows the uploaded `index (3).html`:
+- Dark evergreen sidebar, six sections: Workspace, Sales & Fulfillment, Procurement & Inventory, Customer Service, Finance, Insights & Administration.
+- Starred favorites separated from the sections, without duplicated links.
+- Toggleable groups, pinned links, navigation search, quick navigation, visit-frequency ordering and Chinese/English labels.
+- Original typography/colors/card/table/modal aesthetics, with business module pages powered by real Supabase data.
+- The footer shows `Approved UI v3 · Supabase production · 2026-11-24` as a visible deployment marker.
+
+**Release verification:** The GitHub files and JS syntax were checked; the linked Vercel connector still returns 404, so GitHub upload is verified but production deployment of this exact commit is **not** independently verified. Check Vercel Deployments for the latest `main` commit, and verify the footer marker. This should not be described as a fully accepted live release until the environment and user session pass acceptance tests.
 
 ## Applications
 - **ERP:** https://rfriend-business-os.vercel.app/
