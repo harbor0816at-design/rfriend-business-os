@@ -316,6 +316,11 @@ async function returnsPage(){
    $('v4NewReturn').onclick=()=>erpOpenCreate('returns');
   }catch(e){if($('v4ReturnsList'))$('v4ReturnsList').textContent='退换货接口错误：'+errorMessage(e)}
  }
+ window.erpV4Create=async function(entity){
+  if(entity==='products'){productEditor();return true}
+  if(entity==='tickets'){await createTicket();return true}
+  return false;
+ };
  window.erpV4Page=async function(key){
   if(key==='products'){await productPage();return true}
   if(key==='purchase'){await purchasePage();return true}
