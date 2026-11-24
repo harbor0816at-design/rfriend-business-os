@@ -6,7 +6,9 @@ const ERP_NAV=[
  ['tasks','☑','我的工作台','My workspace'],
  ['intake','⇪','订单导入','Order intake'],
  ['orders','↗','销售订单','Sales orders'],
- ['inventory','▣','库存中心','Inventory'],
+ ['products','▤','商品管理','Products'],
+ ['inventory','▣','库存管理','Inventory'],
+ ['movements','☰','库存流水','Stock movements'],
  ['purchase','↓','采购管理','Purchasing'],
  ['shipping','➜','发货履约','Shipping'],
  ['returns','↩','退换货质检','Returns & QC'],
@@ -22,12 +24,14 @@ const ERP_NAV=[
 const ERP_GROUPS=[
  ['workspace','工作台','Workspace',['dashboard','tasks']],
  ['sales','销售与履约','Sales & Fulfillment',['intake','orders','shipping']],
- ['stock','采购与库存','Procurement & Inventory',['purchase','inventory','imei','used']],
+ ['stock','采购与库存','Procurement & Inventory',['products','inventory','purchase','movements','imei','used']],
  ['care','客户服务','Customer Service',['tickets','returns']],
  ['money','财务管理','Finance',['finance']],
  ['system','分析与系统','Insights & Administration',['reports','audit','team','settings']]
 ];
 const ERP_MODULES={
+ products:{title:'商品管理',en:'Products',tables:[['products','商品目录'],['sku_dictionary','SKU 字典'],['product_keyword_rules','SKU 识别规则']]},
+ movements:{title:'库存流水',en:'Stock movements',tables:[['inventory_movements','正式库存流水'],['stock_balances','仓库库存余额']]},
  tasks:{title:'我的工作台',en:'My workspace',tables:[['work_tasks','工作任务'],['reconciliation_cases','订单核查异常']]},
  intake:{title:'订单导入',en:'Order intake',tables:[['import_batches','导入批次'],['order_source_records','历史源文件行'],['reconciliation_cases','数据质量异常'],['sku_dictionary','SKU 对照字典']]},
  orders:{title:'销售订单',en:'Sales orders',tables:[['orders','订单主表'],['order_items','订单商品明细'],['order_status_history','订单状态历史']]},
@@ -47,10 +51,10 @@ const ERP_MODULES={
 const ERP_VIEWS={channels:'rfriend_erp_channels',warehouses:'rfriend_erp_warehouses',shipments:'rfriend_erp_shipments',orders:'rfriend_erp_orders',work_tasks:'rfriend_erp_tasks',staff_roles:'rfriend_erp_profile'};
 const ERP_ROLE_ALLOW={
  admin:['*'],
- operations:['dashboard','tasks','intake','orders','inventory','purchase','shipping','returns','used','tickets','finance','reports','audit','settings','team','imei'],
+ operations:['dashboard','tasks','intake','orders','products','inventory','movements','purchase','shipping','returns','used','tickets','finance','reports','audit','settings','team','imei'],
  support:['dashboard','tasks','orders','tickets','returns','imei','reports'],
  finance:['dashboard','tasks','orders','purchase','finance','reports'],
- warehouse:['dashboard','tasks','shipping','inventory','purchase','returns','used','imei','reports']
+ warehouse:['dashboard','tasks','shipping','products','inventory','movements','purchase','returns','used','imei','reports']
 };
 const ERP_FIELDS={
  products:[['sku','SKU','text',1],['name','商品名称','text',1],['category','品类'],['ean','EAN'],['variant','规格'],['cost_eur','采购成本 EUR','number'],['price_eur','销售价格 EUR','number'],['low_stock_threshold','低库存阈值','number']],
