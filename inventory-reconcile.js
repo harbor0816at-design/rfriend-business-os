@@ -19,15 +19,15 @@
  '<input type="file" id="invImportFile" accept=".csv,text/csv">'+
  '<div id="invImportPreview" style="margin-top:14px"></div>','批量导入仓库 / 实盘库存');
  m.querySelector('#invDownloadTemplate').onclick=()=>{
-  const example='warehouse_code,sku,quality_status,source,observed_qty,reference\\r\\n0815,EXAMPLE_SKU,sellable,0815,5,weekly-warehouse-report';
-  const blob=new Blob(['\\ufeff'+example],{type:'text/csv;charset=utf-8'});
+  const example='warehouse_code,sku,quality_status,source,observed_qty,reference\r\n0815,EXAMPLE_SKU,sellable,0815,5,weekly-warehouse-report';
+  const blob=new Blob(['\ufeff'+example],{type:'text/csv;charset=utf-8'});
   const url=URL.createObjectURL(blob),a=document.createElement('a');
   a.href=url;a.download='rfriend-weekly-inventory-template.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),300);
  };
  m.querySelector('#invImportFile').onchange=async e=>{
   const file=e.target.files?.[0];if(!file)return;
   try{
-   const parsed=erpCsvParse((await file.text()).replace(/^\\ufeff/,''));
+   const parsed=erpCsvParse((await file.text()).replace(/^\ufeff/,''));
    const cols=parsed[0]?.map(x=>x.trim().toLowerCase())||[];
    const needed=['warehouse_code','sku','quality_status','source','observed_qty','reference'];
    const missing=needed.filter(k=>!cols.includes(k));
