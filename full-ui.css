@@ -34,3 +34,15 @@ table{white-space:nowrap;font-size:12.5px}th{background:#f7f9f8;color:#65776d;pa
 .erp-mini{font-size:11px;color:#72877a}.erp-blocked{padding:13px;background:#fff8e8;border:1px solid #f1e1b2;color:#785a18;border-radius:8px}
 @media(max-width:1050px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.erp-grid{grid-template-columns:1fr}}
 @media(max-width:760px){.shell{display:block}.sidebar{width:100%;position:static;display:block;max-height:48vh;overflow:auto;padding:12px}.sidebar .side-label{display:none}.sidebar .nav{display:inline-block;width:auto;white-space:nowrap;padding:9px}.sidebar .brand{font-size:16px;display:block}.sidebar .brand small{display:none}main{margin:0}.top{padding:16px;display:flex;flex-wrap:wrap}.top h1{font-size:22px}.content{padding:14px}.erp-fields{grid-template-columns:1fr}.erp-kv{grid-template-columns:1fr}.erp-kv dt{font-weight:700}}
+
+/* MECE navigation: seven collapsible business domains, one open at a time */
+.sidebar .erp-nav-section{margin:5px 0}
+.sidebar .erp-nav-group{width:100%;border:0;border-radius:9px;padding:12px 10px;background:transparent;color:#b1cabd;display:flex;align-items:center;gap:8px;justify-content:space-between;text-align:left;font-size:13px;font-weight:700;cursor:pointer}
+.sidebar .erp-nav-group:hover,.sidebar .erp-nav-group.selected{color:#fff;background:#214638}
+.sidebar .erp-nav-group span:first-child{flex:1}
+.sidebar .erp-nav-count{font-size:10px;border-radius:8px;padding:2px 6px;color:#aacabe;background:#284c3d;min-width:18px;text-align:center}
+.sidebar .erp-nav-chevron{width:14px;text-align:right;color:#9fbdaf;font-size:16px}
+.sidebar .erp-nav-sub{padding:3px 0 6px 13px;border-left:1px solid #345746;margin-left:12px}
+.sidebar .erp-nav-sub .nav{padding:10px 11px;font-size:12.5px;font-weight:500}
+.sidebar .erp-nav-sub .nav.active{background:#285d45;color:#fff}
+@media(max-width:760px){.sidebar{max-height:52vh}.sidebar .erp-nav-section{display:inline-block;vertical-align:top;margin:0 5px 6px 0}.sidebar .erp-nav-group{width:auto;padding:8px 10px}.sidebar .erp-nav-sub{display:flex;flex-wrap:wrap;gap:4px}.sidebar .erp-nav-sub .nav{display:inline-flex}}
