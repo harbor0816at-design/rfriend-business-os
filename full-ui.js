@@ -215,7 +215,9 @@ function erpChooseAction(mode){
  const m=erpModal('<div class="erp-toolbar">'+list.map(key=>'<button data-erp-action="'+erpEsc(key)+'" class="btn">'+erpEsc(key)+'</button>').join('')+'</div>','快速'+(mode==='bulk'?'批量导入':'新建业务'));
  m.querySelectorAll('[data-erp-action]').forEach(button=>button.onclick=()=>{
   const entity=button.dataset.erpAction;m.remove();
-  if(mode==='bulk'){erpTab=entity;erpBulkModal()}else erpOpenCreate(entity);
+  if(mode==='bulk'){erpTab=entity;erpBulkModal()}else if(typeof window.erpV4Create==='function'){
+    Promise.resolve(window.erpV4Create(entity)).then(handled=>{if(!handled)erpOpenCreate(entity)}).catch(err=>alert(errorMessage(err)));
+   }else erpOpenCreate(entity);
  });
 }
 function erpBuildNav(){
