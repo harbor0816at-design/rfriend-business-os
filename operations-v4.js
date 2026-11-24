@@ -248,11 +248,23 @@
      '<td>'+h(r.return_status)+'</td><td>'+h(r.inspection_status)+'</td><td>'+h(r.used_transfer_status)+'</td>'+
      '<td>'+h(r.refund_status)+'</td><td>'+r.item_lines+'</td>'+
      '<td>'+(['admin','operations','warehouse'].includes(role())?
-      '<button class="btn v4FinalizeReturn" data-i="'+i+'">验证流转</button>':'只读')+'</td></tr>'));
+      '<button class="btn v4InspectReturn" data-i="'+i+'">质检</button> <button class="btn v4FinalizeReturn" data-i="'+i+'">验证流转</button>':'只读')+'</td></tr>'));
    $('v4UsedList').innerHTML=table(['IMEI','品牌','型号','颜色','内存','等级','状态','来源'],
     used.filter(x=>String(x.brand).toUpperCase()==='OPPO').map(x=>'<tr><td>'+h(x.imei)+'</td><td>'+h(x.brand)+'</td><td>'+h(x.model)+'</td>'+
     '<td>'+h(x.color||'待核')+'</td><td>'+h(x.storage_variant||'待核')+'</td><td>'+h(x.grade)+'</td>'+
     '<td>'+h(x.status)+'</td><td>'+h(x.acquisition_source||'—')+'</td></tr>'));
+   $('v4ReturnsList').querySelectorAll('.v4InspectReturn').forEach(btn=>btn.onclick=()=>{
+    const row=returns[Number(btn.dataset.i)];
+    if(!['received','inspection'].includes(row.return_status)){alert('请先将退货状态流转到 received / inspection，才能质检。');return}
+    modalForm('OPPO 退货质检 · '+row.rma_number,[
+     forms.select('result','质检结果',[['sellable','确认合格'],['repair','需维修'],['scrap','报废'],['disputed','有争议']]),
+     '<label class="erp-field wide">质检说明<textarea class="control" name="notes" maxlength="4000" rows="4"></textarea></label>'
+    ].join(''),async v=>{
+     await saveViaRpc('rfriend_erp_inspect_return',{
+       p_return_id:row.id,p_result:v.result,p_notes:v.notes||null
+     },['returns_v4','returns','used_devices']);
+    });
+   });
    $('v4ReturnsList').querySelectorAll('.v4FinalizeReturn').forEach(btn=>btn.onclick=async()=>{
     const row=returns[Number(btn.dataset.i)];
     if(!confirm('只对已确认合格且 OPPO/IMEI/订单明细完整的退货进行自动流转；缺少数据会进入待核状态。继续？'))return;
