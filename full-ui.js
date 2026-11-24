@@ -96,6 +96,7 @@ const ERP_COLUMNS={
 };
 const ERP_LABELS={email:'邮箱',id:'ID',external_order_id:'外部订单号',channel_code:'渠道',ordered_at:'下单时间',created_at:'创建时间',updated_at:'更新时间',customer_name:'客户姓名',order_status:'订单状态',total_eur:'金额 EUR',sku:'SKU',name:'名称',title:'标题',category:'分类',ean:'EAN',price_eur:'售价 EUR',cost_eur:'成本 EUR',low_stock_threshold:'低库存阈值',warehouse_id:'仓库 ID',product_id:'商品 ID',on_hand:'库存数量',reserved:'预留数量',quality_status:'质量状态',quantity_delta:'变动数量',reason:'原因',po_number:'采购单号',supplier:'供应商',status:'状态',shipment_number:'发货单号',carrier:'承运商',tracking_number:'物流单号',shipped_at:'发货时间',rma_number:'RMA 单号',return_status:'退换状态',inspection_status:'质检状态',ticket_number:'工单编号',priority:'优先级',payment_reference:'付款凭证',invoice_number:'发票号码',invoice_type:'发票类型',amount_eur:'金额 EUR',vat_eur:'VAT',brand:'品牌',model:'型号',grade:'成色',imei:'IMEI',task_type:'任务类型',assigned_role:'负责部门',due_at:'截止时间',source_sheet:'源表',source_status:'来源状态',product_family:'商品系列',validation_state:'数据验证',recorded_orders:'订单数量',sales_month:'月份',order_face_value_eur:'订单面额',delivered_orders:'签收订单',action:'操作',actor_id:'操作员',entity_type:'业务实体',entity_id:'关联 ID',user_id:'员工 ID',role:'角色',active:'启用',allowed_modules:'允许模块'};
 const ERP_CACHE=new Map();
+let erpCurrentUserIdentity=null;
 let erpSelectedPage='dashboard',erpTab='',erpSearch='',erpOffset=0,erpRow=null,erpLoading=0;
 const ERP_MAX=1000;
 function erpEsc(v){return escapeHTML(v)}
@@ -626,6 +627,8 @@ function erpSettingsExtras(){
 }
 async function erpRenderPage(){
  if(!profile)return;
+ const identity=String(profile.user_id)+'|'+String(profile.role);
+ if(erpCurrentUserIdentity!==identity){ERP_CACHE.clear();erpCurrentUserIdentity=identity}
  erpRenderNav();el('heading').textContent=erpTitle(erpSelectedPage);
  if(erpSelectedPage==='dashboard'){await erpDashboard();return}
  if(!ERP_MODULES[erpSelectedPage])return;
@@ -637,4 +640,7 @@ const oldLoadData=window.loadData;
 document.querySelector('#lang')?.addEventListener('change',()=>{erpRenderNav();render()});
 erpBuildNav();
 erpBuildTopActions();
+document.querySelector('#logoutBtn')?.addEventListener('click',()=>{
+ ERP_CACHE.clear();erpCurrentUserIdentity=null;erpTab='';erpSearch='';erpOffset=0;
+});
 if(profile)render();
