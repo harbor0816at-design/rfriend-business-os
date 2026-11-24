@@ -712,11 +712,20 @@ function erpSettingsExtras(){
  const root=document.querySelector('#erpRecords');
  if(root)root.insertAdjacentHTML('beforebegin','<div class="message warn" style="margin-bottom:14px">本系统已接入真实数据库。生产备份和恢复应使用 Supabase 项目备份或受控导出；不允许使用 Demo 的浏览器本地覆盖功能。</div>');
 }
+const ERP_DESCRIPTIONS={
+ dashboard:'全业务监控与风险',tasks:'角色待办与审批',intake:'批量、单条、文字、校验',
+ orders:'订单—履约—发票全链路',products:'SKU 与产品信息',inventory:'多仓库存与安全阈值',
+ movements:'收发货与库存变动',purchase:'申请、审批、收货',shipping:'仓库指令与物流确认',
+ returns:'退货收货、质检、退款',used:'一机一档、销售与发货',tickets:'WhatsApp / 邮件 / 电话',
+ finance:'退款、发票与待办',reports:'销售、库存、采购、售后与导出',audit:'业务状态变更记录',
+ settings:'渠道、仓库、数据',team:'员工账号与角色权限',imei:'上传、识别、人工校正'
+};
 async function erpRenderPage(){
  if(!profile)return;
  const identity=String(profile.user_id)+'|'+String(profile.role);
  if(erpCurrentUserIdentity!==identity){ERP_CACHE.clear();erpCurrentUserIdentity=identity}
  erpRenderNav();el('heading').textContent=erpTitle(erpSelectedPage);
+ if(el('subtitle'))el('subtitle').textContent=lang==='en'?(ERP_MODULES[erpSelectedPage]?.en||'Operations'):ERP_DESCRIPTIONS[erpSelectedPage]||'真实 ERP 数据';
  if(erpSelectedPage==='dashboard'){await erpDashboard();return}
  if(!ERP_MODULES[erpSelectedPage])return;
  await erpRenderModule();
@@ -727,6 +736,7 @@ const oldLoadData=window.loadData;
 document.querySelector('#lang')?.addEventListener('change',()=>{erpRenderNav();render()});
 erpBuildNav();
 erpBuildTopActions();
+document.querySelector('.foot').textContent='Rfriend Business OS · Approved UI v3 · Supabase production · 2026-11-24';
 document.querySelector('#logoutBtn')?.addEventListener('click',()=>{
  ERP_CACHE.clear();erpCurrentUserIdentity=null;erpTab='';erpSearch='';erpOffset=0;
 });
