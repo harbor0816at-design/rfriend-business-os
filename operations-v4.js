@@ -163,7 +163,8 @@
    '<div class="cards" id="v4TicketStats"></div><section class="panel">'+
    '<div class="erp-header"><h3>客服工单与 SLA 预警</h3><div class="erp-toolbar"><select id="v4TicketFilter"><option value="all">全部工单</option>'+
    '<option value="24">超时 ≥24小时</option><option value="48">超时 ≥48小时</option><option value="72">超时 ≥72小时</option>'+
-   '<option value="open">全部未完结</option></select></div></div><div id="v4TicketList">读取中…</div></section>';
+   '<option value="open">全部未完结</option></select></div></div><div id="v4TicketList">读取中…</div></section>'+ 
+   '<section class="panel"><h3>自动超时提醒记录（24小时、48小时、72小时及后续每日）</h3><div id="v4TicketAlerts">读取中…</div></section>';
   try{
    const [list]=await Promise.all([erpData('tickets_sla',true),staffList()]);
    if(!$('v4TicketList'))return;
@@ -186,6 +187,16 @@
     $('v4TicketList').querySelectorAll('.v4TicketAssign').forEach(btn=>btn.onclick=()=>ticketAssign(list.find(t=>t.id===btn.dataset.id)));
    };
    $('v4TicketFilter').onchange=draw;draw();$('v4NewTicket').onclick=createTicket;
+   try{
+    const alerts=await erpData('ticket_sla_alerts',true);
+    const openSet=new Set(open.map(x=>x.id));
+    if($('v4TicketAlerts'))$('v4TicketAlerts').innerHTML=table(['预警触发时间','工单','逾期节点','负责人','工单状态'],
+     alerts.filter(a=>openSet.has(a.ticket_id)).sort((a,b)=>String(b.triggered_at).localeCompare(String(a.triggered_at))).slice(0,100)
+     .map(a=>'<tr><td>'+h(erpDate(a.triggered_at))+'</td><td>'+h(a.ticket_number)+'</td>'+
+      '<td><span class="erp-sla erp-sla-high">'+h(a.threshold_hours)+' 小时</span></td><td>'+h(staffName(a.assignee_id))+
+      '</td><td>'+h(cn(a.status))+'</td></tr>'),'暂无超时预警');
+   }catch(err){if($('v4TicketAlerts'))$('v4TicketAlerts').textContent='提醒数据不可读取：'+errorMessage(err)}
+   
   }catch(e){if($('v4TicketList'))$('v4TicketList').textContent='工单接口错误：'+errorMessage(e)}
  }
  function caseAssign(row){
