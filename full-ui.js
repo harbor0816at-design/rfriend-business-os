@@ -140,11 +140,12 @@ function erpPanel(title,content,subtitle=''){
 function erpMetric(label,num,detail=''){return '<div class="card"><small>'+erpEsc(label)+'</small><strong>'+erpEsc(num)+'</strong><small>'+erpEsc(detail)+'</small></div>'}
 function erpTable(data,key){
  const cols=ERP_COLUMNS[key]||Object.keys(data[0]||{}).filter(k=>k!=='raw_data').slice(0,7);
- const rows=data.slice(0,250).map((row,i)=>'<tr data-row-index="'+i+'">'+cols.map(k=>'<td title="'+erpEsc(erpValue(row[k],k))+'">'+erpEsc(erpValue(row[k],k)).slice(0,140)+'</td>').join('')+
- '<td><button class="btn erp-view" data-index="'+i+'" style="padding:6px 8px">详情 / 操作</button></td></tr>');
+ const first=erpOffset*50;
+ const rows=data.slice(first,first+50).map((row,i)=>'<tr>'+cols.map(k=>'<td title="'+erpEsc(erpValue(row[k],k))+'">'+erpEsc(erpValue(row[k],k)).slice(0,140)+'</td>').join('')+
+ '<td><button class="btn erp-view" data-index="'+(first+i)+'" style="padding:6px 8px">详情 / 操作</button></td></tr>');
  return '<div class="erp-scroll tablewrap"><table><thead><tr>'+[...cols.map(k=>ERP_LABELS[k]||k),'操作'].map(k=>'<th>'+erpEsc(k)+'</th>').join('')+'</tr></thead><tbody>'+
- (rows.length?rows.join(''):'<tr><td colspan="'+(cols.length+1)+'" class="erp-empty">暂无记录（生产数据库未录入或当前角色无权限）</td></tr>')+
- '</tbody></table></div><div class="erp-mini" style="margin-top:11px">当前展示 '+data.length+' 条记录中的前 '+Math.min(data.length,250)+' 条。所有记录均来自数据库读取。</div>';
+ (rows.length?rows.join(''):'<tr><td colspan="'+(cols.length+1)+'" class="erp-empty">暂无记录（数据库未录入或当前角色无权限）</td></tr>')+'</tbody></table></div>'+
+ '<div class="erp-pagination"><button id="erpPrev" class="btn" '+(erpOffset===0?'disabled':'')+'>上一页</button><span>第 '+(erpOffset+1)+' / '+Math.max(1,Math.ceil(data.length/50))+' 页 · 共 '+data.length+' 条</span><button id="erpNext" class="btn" '+(first+50>=data.length?'disabled':'')+'>下一页</button></div>';
 }
 function erpModal(html,title='详情 / 操作'){
  document.querySelector('#erpModal')?.remove();
@@ -159,10 +160,14 @@ function erpModal(html,title='详情 / 操作'){
 async function erpData(name,refresh=false){
  if(!refresh&&ERP_CACHE.has(name))return ERP_CACHE.get(name);
  const view=ERP_VIEWS[name]||'rfriend_erp_'+name;
- const data=await authorized('/rest/v1/'+view+'?select=*&limit='+ERP_MAX);
- if(!Array.isArray(data))throw new Error('Unexpected database response for '+name);
- ERP_CACHE.set(name,data);
- return data;
+ const combined=[];
+ for(let offset=0;offset<10000;offset+=ERP_MAX){
+  const data=await authorized('/rest/v1/'+view+'?select=*&limit='+ERP_MAX+'&offset='+offset);
+  if(!Array.isArray(data))throw new Error('Unexpected database response for '+name);
+  combined.push(...data);
+  if(data.length<ERP_MAX)break;
+ }
+ ERP_CACHE.set(name,combined);return combined;
 }
 function erpCSV(rows){if(!rows.length)return '';const keys=Object.keys(rows[0]);return [keys,...rows.map(o=>keys.map(k=>o[k]))].map(row=>row.map(v=>'"'+String((typeof v==='object'?JSON.stringify(v):v)??'').replaceAll('"','""')+'"').join(',')).join('\r\n')}
 function erpDownload(name,rows){
@@ -213,9 +218,9 @@ async function erpRenderModule(){
  '<button id="erpExport">↓ 导出 CSV</button><button id="erpBulk">⇪ 批量导入</button>'+
  (ERP_CREATE[slug]===erpTab?'<button class="primary" id="erpAdd">＋ 新建</button>':'')+
  '</div><div id="erpRecords"><p class="erp-empty">正在从 Supabase 读取…</p></div>','数据源：erp.'+erpTab+' · 角色：'+(profile?.role||'-'));
- document.querySelectorAll('[data-erp-tab]').forEach(b=>b.onclick=()=>{erpTab=b.dataset.erpTab;erpSearch='';render()});
- document.querySelector('#erpSearchRun').onclick=()=>{erpSearch=document.querySelector('#erpSearch').value.trim();erpDrawRows()};
- document.querySelector('#erpSearch').onkeydown=e=>{if(e.key==='Enter'){erpSearch=e.target.value.trim();erpDrawRows()}};
+ document.querySelectorAll('[data-erp-tab]').forEach(b=>b.onclick=()=>{erpTab=b.dataset.erpTab;erpSearch='';erpOffset=0;render()});
+ document.querySelector('#erpSearchRun').onclick=()=>{erpSearch=document.querySelector('#erpSearch').value.trim();erpOffset=0;erpDrawRows()};
+ document.querySelector('#erpSearch').onkeydown=e=>{if(e.key==='Enter'){erpSearch=e.target.value.trim();erpOffset=0;erpDrawRows()}};
  document.querySelector('#erpReload').onclick=()=>{ERP_CACHE.delete(erpTab);erpDrawRows()};
  document.querySelector('#erpAdd')?.addEventListener('click',()=>erpOpenCreate(erpTab));
  document.querySelector('#erpExport').onclick=async()=>{try{erpDownload(erpTab,await erpData(erpTab))}catch(e){notice(errorMessage(e),true)}};
@@ -234,21 +239,57 @@ async function erpDrawRows(){
   const filtered=term?data.filter(r=>Object.values(r).some(v=>String(typeof v==='object'?JSON.stringify(v):v).toLowerCase().includes(term))):data;
   target.innerHTML=erpTable(filtered,table);
   erpBindDetail(filtered,table);
+  document.querySelector('#erpPrev')?.addEventListener('click',()=>{if(erpOffset>0){erpOffset--;erpDrawRows()}});
+  document.querySelector('#erpNext')?.addEventListener('click',()=>{if((erpOffset+1)*50<filtered.length){erpOffset++;erpDrawRows()}});
  }catch(e){
   target.innerHTML='<div class="erp-blocked">接口读取失败：'+erpEsc(errorMessage(e))+'。请检查该角色的模块权限和 Supabase API 设置。</div>';
  }
 }
+function erpCsvParse(input){
+ const rows=[];let row=[],cell='',quoted=false;
+ for(let i=0;i<input.length;i++){
+  const c=input[i];
+  if(c==='"'&&quoted&&input[i+1]==='"'){cell+='"';i++}
+  else if(c==='"'){quoted=!quoted}
+  else if(c===','&&!quoted){row.push(cell);cell=''}
+  else if((c==='\\n'||c==='\\r')&&!quoted){if(c==='\\r'&&input[i+1]==='\\n')i++;row.push(cell);if(row.some(x=>x.length))rows.push(row);row=[];cell=''}
+  else cell+=c;
+ }
+ row.push(cell);if(row.some(x=>x.length))rows.push(row);
+ if(quoted)throw new Error('CSV 双引号没有关闭');
+ return rows;
+}
 function erpBulkModal(){
- const m=erpModal('<p>选择 CSV 文件，在本地预览前 10 条记录。导入生产库必须执行后端字段校验、重复检测和审批，不能沿用 Demo 的浏览器本地写入。</p>'+
- '<input type="file" id="erpBulkFile" accept=".csv,text/csv"><div id="erpBulkPreview" class="erp-mini" style="margin-top:16px"></div>','批量导入 · '+erpTab);
+ const m=erpModal('<p>上传 CSV 文件。系统会预览记录，只有明确支持的实体类型才允许写入生产数据库，单批最多 100 条。</p>'+
+ '<input type="file" id="erpBulkFile" accept=".csv,text/csv"><div id="erpBulkPreview" style="margin-top:16px"></div>','批量导入 · '+erpTab);
  m.querySelector('#erpBulkFile').onchange=async e=>{
   const file=e.target.files?.[0];if(!file)return;
-  const text=await file.text();const lines=text.replace(/\r/g,'').split('\n').filter(Boolean);
-  const first=lines[0]?.split(',')||[];const preview=lines.slice(1,11).map(line=>line.split(','));
-  m.querySelector('#erpBulkPreview').innerHTML='<p>文件：'+erpEsc(file.name)+' · '+Math.max(0,lines.length-1)+' 行（只读预览，尚未提交）</p>'+
-  '<div class="tablewrap"><table><thead><tr>'+first.map(h=>'<th>'+erpEsc(h)+'</th>').join('')+'</tr></thead><tbody>'+
-  preview.map(row=>'<tr>'+row.map(c=>'<td>'+erpEsc(c)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>'+
-  '<p class="erp-blocked">安全提示：批量上传入库接口正在接入事务校验。当前只提供文件检查，尚未提交生产数据库。</p>';
+  try{
+   const parsed=erpCsvParse((await file.text()).replace(/^\\ufeff/,''));
+   const heads=(parsed[0]||[]).map(x=>x.trim()),records=parsed.slice(1).map(row=>Object.fromEntries(heads.map((h,i)=>[h,row[i]||''])));
+   if(!heads.length||!records.length)throw new Error('文件没有有效数据行');
+   const canImport=!!ERP_FIELDS[erpTab];
+   const preview=parsed.slice(1,11);
+   m.querySelector('#erpBulkPreview').innerHTML='<p>文件：'+erpEsc(file.name)+' · '+records.length+' 条记录</p>'+
+   '<div class="tablewrap"><table><thead><tr>'+heads.map(h=>'<th>'+erpEsc(h)+'</th>').join('')+'</tr></thead><tbody>'+
+   preview.map(row=>'<tr>'+row.map(c=>'<td>'+erpEsc(c)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>'+
+   (canImport?'<div class="erp-blocked" style="margin-top:14px">CSV 字段名应使用 ERP 数据库字段名，每批 100 行，逐批提交，单批失败全部回滚；已成功批次不会回滚。</div><div class="erp-actions" style="margin-top:15px"><button id="erpBulkSubmit" class="primary">确认导入真实数据库</button></div><p id="erpBulkStatus"></p>':
+    '<div class="erp-blocked" style="margin-top:14px">当前业务类型尚未提供安全批量写入接口，仅开放预览和导出。</div>');
+   if(canImport)m.querySelector('#erpBulkSubmit').onclick=async()=>{
+    if(!confirm('确认将 '+records.length+' 条 '+erpTab+' 数据提交到生产数据库？'))return;
+    const button=m.querySelector('#erpBulkSubmit'),status=m.querySelector('#erpBulkStatus');button.disabled=true;
+    let completed=0;
+    try{
+     for(let i=0;i<records.length;i+=100){
+      const data=records.slice(i,i+100);
+      await authorized('/rest/v1/rpc/rfriend_erp_bulk_create_records',{method:'POST',body:{p_entity:erpTab,p_rows:data}});
+      completed+=data.length;status.textContent='已完成 '+completed+' / '+records.length+' 条';
+     }
+     ERP_CACHE.delete(erpTab);status.style.color='#127347';status.textContent='导入成功，共 '+completed+' 条。';
+    }catch(err){status.style.color='#b03432';status.textContent='已入库 '+completed+' 条，后续失败：'+errorMessage(err)}
+    finally{button.disabled=false}
+   };
+  }catch(err){m.querySelector('#erpBulkPreview').textContent='CSV 解析失败：'+errorMessage(err)}
  };
 }
 async function erpDashboard(){
