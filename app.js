@@ -133,21 +133,37 @@ function bindPage(){
   const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='rfriend_erp_sales.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),300);
  });
 }
-async function loadData(){
- el('notice').innerHTML='';el('content').innerHTML='<section class="panel">'+t('正在读取真实数据库…','Loading live database…')+'</section>';
- try{
-  const paths=[
-   '/rest/v1/rfriend_erp_orders?select=*&order=ordered_at.desc.nullslast&limit=3000',
-   '/rest/v1/rfriend_erp_monthly?select=*&limit=5000',
-   '/rest/v1/rfriend_erp_tasks?select=*&order=created_at.desc&limit=1000',
-   '/rest/v1/rfriend_erp_warehouses?select=*&limit=20',
-   '/rest/v1/rfriend_erp_shipments?select=*&order=created_at.desc&limit=1000'
-  ];
-  [orders,monthly,tasks,warehouses,shipments]=await Promise.all(paths.map(path=>authorized(path)));
-  render();
- }catch(err){notice(errorMessage(err),true);el('content').innerHTML='<section class="panel">'+t('数据库加载失败，请检查登录或后端权限。','Database loading failed; verify authentication and API access.')+'</section>';}
+async function fetchAllPages(table,{sort='',chunk=1000,maxRows=20000}={}){
+ const rows=[];
+ for(let offset=0;offset<maxRows;offset+=chunk){
+  const query='/rest/v1/'+table+'?select=*'+(sort?'&order='+sort:'')+'&limit='+chunk+'&offset='+offset;
+  const page=await authorized(query);
+  if(!Array.isArray(page))throw new Error('Invalid paginated response for '+table);
+  rows.push(...page);
+  if(page.length<chunk)return rows;
+ }
+ throw new Error('Pagination safety limit reached for '+table+'. Refine query or extend server paging.');
 }
-
+async function loadData(){
+ el('notice').innerHTML='';
+ el('content').innerHTML='<section class="panel">'+t('正在分页读取完整历史订单…','Loading complete paginated orders…')+'</section>';
+ try{
+  // PostgREST/Supabase defaults to max 1,000 rows per response regardless of limit=3000.
+  // Use deterministic ordering to ensure no records disappear at page boundaries.
+  [orders,monthly,tasks,warehouses,shipments]=await Promise.all([
+   fetchAllPages('rfriend_erp_orders',{sort:'ordered_at.desc.nullslast,id.asc',maxRows:20000}),
+   fetchAllPages('rfriend_erp_monthly',{sort:'period.desc,channel_code.asc,order_status.asc'}),
+   fetchAllPages('rfriend_erp_tasks',{sort:'created_at.desc,id.asc'}),
+   fetchAllPages('rfriend_erp_warehouses',{sort:'code.asc'}),
+   fetchAllPages('rfriend_erp_shipments',{sort:'created_at.desc,id.asc'})
+  ]);
+  if(orders.length<1000)notice(t('订单读取完成，但当前数量少于 1000，请检查账户权限和数据源。','Order total appears below expected baseline; verify database and role.'),true);
+  render();
+ }catch(err){
+  notice(errorMessage(err),true);
+  el('content').innerHTML='<section class="panel">'+t('订单加载失败。请检查权限与分页接口。','Order load failed; verify authorization and pagination.')+'</section>';
+ }
+}
 // PASSWORD RECOVERY: Auth verifies recovery token; no service role or privileged endpoint is used.
 let recoveryAccessToken=null;
 function authScreen(which){
