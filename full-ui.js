@@ -58,9 +58,9 @@ const ERP_FIELDS={
  purchase_orders:[['po_number','采购单号','text',1],['supplier','供应商','text',1],['warehouse_id','仓库 ID'],['status','状态','select:draft|requested']],
  orders:[['external_order_id','外部订单号','text',1],['channel_id','渠道 ID','text',1],['customer_name','客户姓名'],['order_status','状态','select:pending|confirmed'],['total_eur','金额 EUR','number']],
  returns:[['order_id','订单 UUID','text',1],['type','退换货类型','select:return|exchange'],['reason','原因','text',1]],
- work_tasks:[['title','任务标题','text',1],['task_type','任务类型'],['assigned_role','分配岗位','select:support|operations|warehouse|finance'],['due_at','截止时间','datetime-local']],
- used_devices:[['imei','IMEI','text',1],['brand','品牌','text',1],['model','型号','text',1],['grade','成色级别'],['purchase_cost_eur','采购成本 EUR','number'],['listing_price_eur','挂牌价 EUR','number']],
- invoices:[['invoice_number','发票号','text',1],['order_id','关联订单 UUID'],['invoice_type','发票类型'],['amount_eur','含税金额','number'],['vat_eur','VAT','number']],
+ work_tasks:[['title','任务标题','text',1],['task_type','任务类型','select:other|support|operations|finance|warehouse|review'],['assigned_role','分配岗位','select:support|operations|warehouse|finance'],['due_at','截止时间','datetime-local']],
+ used_devices:[['imei','IMEI','text',1],['brand','品牌','text',1],['model','型号','text',1],['grade','成色级别','select:ungraded|A|B|C|D'],['purchase_cost_eur','采购成本 EUR','number'],['listing_price_eur','挂牌价 EUR','number']],
+ invoices:[['invoice_number','发票号','text',1],['order_id','关联订单 UUID'],['invoice_type','发票类型','select:sales|purchase|credit_note'],['amount_eur','含税金额','number'],['vat_eur','VAT','number']],
  };
 const ERP_CREATE={
  inventory:'products',purchase:'purchase_orders',orders:'orders',returns:'returns',tickets:'tickets',
@@ -179,11 +179,45 @@ function erpDownload(name,rows){
  const csv=erpCSV(rows);const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='rfriend-'+name+'-'+new Date().toISOString().slice(0,10)+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),300);
 }
+const ERP_WORKFLOW={
+ tickets:{new:['assigned','in_progress'],assigned:['in_progress','waiting_customer','waiting_operations','waiting_finance'],
+  in_progress:['waiting_customer','waiting_operations','waiting_finance','resolved'],
+  waiting_customer:['in_progress','resolved'],waiting_operations:['in_progress','resolved'],
+  waiting_finance:['in_progress','resolved'],resolved:['closed']},
+ work_tasks:{open:['in_progress','blocked','done','cancelled'],in_progress:['blocked','done','cancelled'],
+  blocked:['in_progress','cancelled'],done:['open']},
+ purchase_orders:{draft:['submitted','cancelled'],submitted:['approved','cancelled'],approved:['ordered']},
+ returns:{requested:['approved','rejected'],approved:['awaiting_customer','in_transit'],awaiting_customer:['in_transit'],
+  in_transit:['received'],received:['inspection'],inspection:['resolved'],resolved:['closed']},
+ orders:{pending:['confirmed','cancel_requested'],confirmed:['cancel_requested'],cancel_requested:['cancelled']}
+};
 function erpBindDetail(rows,table){
  document.querySelectorAll('.erp-view').forEach(b=>b.onclick=()=>{
   const row=rows[Number(b.dataset.index)];if(!row)return;
-  erpModal('<dl class="erp-kv">'+Object.entries(row).map(([k,v])=>'<dt>'+erpEsc(ERP_LABELS[k]||k)+'</dt><dd>'+erpEsc(erpValue(v,k))+'</dd>').join('')+'</dl>'+
-  '<div class="erp-blocked" style="margin-top:14px">当前显示数据库原始记录。修改状态、库存扣减、退款执行等操作必须经服务端权限和事务校验，暂不通过浏览器直接改写。</div>',ERP_MODULES[erpSelectedPage]?.title||table);
+  const state=(table==='returns'?row.return_status:table==='orders'?row.order_status:row.status);
+  const options=ERP_WORKFLOW[table]?.[state]||[];
+  const workflow=options.length&&row.id?
+    '<div class="erp-blocked" style="margin:15px 0">状态变更由 Supabase 服务端验证角色、前后状态并写入审计日志。不会自动执行库存扣减或支付退款。</div>'+
+    '<form id="erpStateForm"><div class="erp-fields"><div class="erp-field"><label>推进至状态</label><select name="status">'+
+     options.map(x=>'<option value="'+erpEsc(x)+'">'+erpEsc(x)+'</option>').join('')+
+    '</select></div><div class="erp-field"><label>处理备注</label><input name="note" placeholder="说明处理结果与依据"></div></div>'+
+    '<div class="erp-actions" style="margin-top:14px"><button class="primary" type="submit">确认状态流转</button></div>'+
+    '<p id="erpStatusMsg"></p></form>':
+    '<div class="erp-mini" style="margin-top:14px">当前记录仅可查看详情；此状态暂没有可执行的操作，或相应业务操作未开放。</div>';
+  const modal=erpModal('<dl class="erp-kv">'+Object.entries(row).map(([k,v])=>
+   '<dt>'+erpEsc(ERP_LABELS[k]||k)+'</dt><dd>'+erpEsc(erpValue(v,k))+'</dd>').join('')+'</dl>'+workflow,
+   ERP_MODULES[erpSelectedPage]?.title||table);
+  modal.querySelector('#erpStateForm')?.addEventListener('submit',async e=>{
+   e.preventDefault();const body=Object.fromEntries(new FormData(e.target));
+   const btn=e.target.querySelector('[type=submit]'),status=modal.querySelector('#erpStatusMsg');btn.disabled=true;
+   try{
+    await authorized('/rest/v1/rpc/rfriend_erp_advance_status',{method:'POST',
+     body:{p_entity:table,p_id:row.id,p_status:body.status,p_note:body.note}});
+    status.textContent='状态已成功更新至 '+body.status;status.style.color='#128257';
+    ERP_CACHE.delete(table);erpDrawRows();
+   }catch(err){status.textContent='更新失败：'+errorMessage(err);status.style.color='#b03432'}
+   finally{btn.disabled=false}
+  });
  });
 }
 function erpTitle(id){return ERP_NAV.find(x=>x[0]===id)?.[lang==='en'?3:2]||'经营总览'}
