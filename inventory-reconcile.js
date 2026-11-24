@@ -12,7 +12,69 @@
  const select=(name,options,required=false)=>'<select name="'+name+'" '+(required?'required':'')+'>'+selectOptions(options,'')+'</select>';
  const input=(name,type='text',required=false,extras='')=>'<input name="'+name+'" type="'+type+'" '+(required?'required':'')+' '+extras+'>';
  function closeAndRefresh(modal){modal.remove();for(const x of ['inventory_external_counts','inventory_adjustment_requests','inventory_weekly_snapshots','stock_balances','inventory_movements'])ERP_CACHE.delete(x);erpInventory();}
- function observableForm(target=null){
+ function uploadWarehouseCSV(){
+ const m=erpModal('<p>支持 CSV 按周导入 byrd / 0815 / 办公室 / 二手机仓或实盘的独立库存数量。'+
+ '必须包含列：<code>warehouse_code,sku,quality_status,source,observed_qty,reference</code>；系统只保存核验数据，不直接调整 ERP 库存。</p>'+
+ '<div class="erp-toolbar"><button id="invDownloadTemplate" class="btn">↓ 下载 CSV 模板</button></div>'+
+ '<input type="file" id="invImportFile" accept=".csv,text/csv">'+
+ '<div id="invImportPreview" style="margin-top:14px"></div>','批量导入仓库 / 实盘库存');
+ m.querySelector('#invDownloadTemplate').onclick=()=>{
+  const example='warehouse_code,sku,quality_status,source,observed_qty,reference\\r\\n0815,EXAMPLE_SKU,sellable,0815,5,weekly-warehouse-report';
+  const blob=new Blob(['\\ufeff'+example],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='rfriend-weekly-inventory-template.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),300);
+ };
+ m.querySelector('#invImportFile').onchange=async e=>{
+  const file=e.target.files?.[0];if(!file)return;
+  try{
+   const parsed=erpCsvParse((await file.text()).replace(/^\\ufeff/,''));
+   const cols=parsed[0]?.map(x=>x.trim().toLowerCase())||[];
+   const needed=['warehouse_code','sku','quality_status','source','observed_qty','reference'];
+   const missing=needed.filter(k=>!cols.includes(k));
+   if(missing.length)throw Error('缺少字段：'+missing.join(', '));
+   if(parsed.length<2)throw Error('没有数据行');
+   const wIndex=new Map(warehouseList.map(w=>[w.code.toLowerCase(),w.id]));
+   const pIndex=new Map(products.map(p=>[p.sku.toLowerCase(),p.id]));
+   const rows=[],errors=[];
+   parsed.slice(1).forEach((values,i)=>{
+    const raw=Object.fromEntries(cols.map((name,j)=>[name,String(values[j]||'').trim()]));
+    const warehouse_id=wIndex.get(raw.warehouse_code.toLowerCase());
+    const product_id=pIndex.get(raw.sku.toLowerCase());
+    const qty=Number(raw.observed_qty);
+    const valid=warehouse_id&&product_id&&['sellable','quarantine','repair','scrap','demo'].includes(raw.quality_status)&&
+     ['byrd','0815','office','used','physical','other'].includes(raw.source)&&
+     Number.isSafeInteger(qty)&&qty>=0;
+    if(!valid)errors.push('第 '+(i+2)+' 行：仓库 / SKU / 状态 / 数量 / 来源不合法');
+    else rows.push({warehouse_id,product_id,quality_status:raw.quality_status,source:raw.source,observed_qty:qty,reference:raw.reference||null});
+   });
+   // Do not silently apply duplicate count records; every key must have a single observation.
+   const seen=new Set();
+   for(const v of rows){const key=JSON.stringify([v.warehouse_id,v.product_id,v.quality_status,v.source]);if(seen.has(key))errors.push('CSV 中重复的仓库/SKU/状态/来源：'+key);seen.add(key)}
+   const preview=m.querySelector('#invImportPreview');
+   preview.innerHTML='<p>解析 '+(parsed.length-1)+' 行；有效 '+rows.length+' 行；错误 '+errors.length+' 行。</p>'+
+    (errors.length?'<div class="erp-blocked">'+errors.slice(0,15).map(esc).join('<p>')+'</div>':'')+
+    '<div class="erp-scroll"><table><thead><tr><th>仓库 ID</th><th>商品 ID</th><th>状态</th><th>来源</th><th>数量</th></tr></thead><tbody>'+
+    rows.slice(0,10).map(x=>'<tr><td>'+esc(x.warehouse_id)+'</td><td>'+esc(x.product_id)+'</td><td>'+esc(x.quality_status)+'</td><td>'+esc(x.source)+'</td><td>'+x.observed_qty+'</td></tr>').join('')+
+    '</tbody></table></div>'+
+    (errors.length?'':'<div class="erp-actions" style="margin-top:14px"><button id="invConfirmImport" class="primary">确认批量提交本周核验</button></div><p id="invImportStatus"></p>');
+   if(!errors.length)preview.querySelector('#invConfirmImport').onclick=async()=>{
+    if(!confirm('确定提交 '+rows.length+' 条独立库存核验数据？本操作不会调整 ERP 库存。'))return;
+    const btn=preview.querySelector('#invConfirmImport'),note=preview.querySelector('#invImportStatus');btn.disabled=true;
+    let done=0;
+    try{
+     for(let i=0;i<rows.length;i+=100){
+      const part=rows.slice(i,i+100);
+      await authorized('/rest/v1/rpc/rfriend_erp_bulk_record_external_counts',{method:'POST',body:{p_rows:part}});
+      done+=part.length;note.textContent='已导入 '+done+' / '+rows.length;
+     }
+     note.style.color='#128257';note.textContent='全部 '+done+' 条核验数据导入成功；正在重新核对差异…';
+     setTimeout(()=>closeAndRefresh(m),600);
+    }catch(err){note.style.color='#b03432';note.textContent='已提交 '+done+' 条，失败：'+errorMessage(err)+'。请核对后再导入。';btn.disabled=false;}
+   };
+  }catch(err){m.querySelector('#invImportPreview').textContent='CSV 读取失败：'+errorMessage(err)}
+ };
+}
+function observableForm(target=null){
   if(!allowedWrite())return;
   const wOptions=warehouseList.map(x=>[x.id,x.name||x.code]);
   const pOptions=products.map(x=>[x.id,x.sku+' · '+x.name]);
@@ -144,7 +206,7 @@
    '<div class="message">每周一自动截取 ERP 库存快照。核验须录入仓库反馈或实物盘点，缺少独立来源的记录显示“待核验”；调整必须由其他授权人员审批后才影响库存。</div>'+
    '<div class="cards" id="inventoryMetrics"></div>'+
    '<section class="panel"><div class="erp-header"><h3>库存交叉核验</h3><div class="erp-actions">'+
-   (allowedWrite()?'<button class="btn" id="inventoryRefresh">↻ 重新捕获本周库存</button><button class="btn" id="inventoryObserve">＋ 录入盘点 / WMS 反馈</button><button class="btn primary" id="inventoryAdjust">＋ 手工库存调整</button>':'')+
+   (allowedWrite()?'<button class="btn" id="inventoryRefresh">↻ 重新捕获本周库存</button><button class="btn" id="inventoryObserve">＋ 录入盘点 / WMS 反馈</button><button class="btn" id="inventoryImport">⇪ 批量导入 WMS/实盘 CSV</button><button class="btn primary" id="inventoryAdjust">＋ 手工库存调整</button>':'')+
    '<button class="btn" id="inventoryExport">↓ 导出差异报表</button></div></div>'+
    '<div class="erp-toolbar" id="inventoryFilters">正在读取库存…</div><div id="inventoryResults"></div></section>'+
    '<div class="erp-grid"><section class="panel"><h3>本周待审批库存调整</h3><div id="inventoryRequests"></div></section>'+
@@ -164,6 +226,7 @@
    for(const id of ['invWarehouse','invQuality'])$(id).onchange=draw;
    $('invSku').oninput=draw;
    $('inventoryObserve')?.addEventListener('click',()=>observableForm());
+   $('inventoryImport')?.addEventListener('click',uploadWarehouseCSV);
    $('inventoryAdjust')?.addEventListener('click',()=>adjustmentForm());
    $('inventoryRefresh')?.addEventListener('click',async()=>{
     try{await authorized('/rest/v1/rpc/rfriend_erp_refresh_weekly_inventory',{method:'POST',body:{}});ERP_CACHE.delete('inventory_weekly_snapshots');await erpInventory()}
