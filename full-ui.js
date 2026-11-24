@@ -67,6 +67,7 @@ const ERP_CREATE={
  tasks:'work_tasks',used:'used_devices',finance:'invoices'
 };
 const ERP_COLUMNS={
+ staff_roles:['email','role','active','created_at'],
  orders:['external_order_id','channel_code','ordered_at','customer_name','order_status','total_eur'],
  products:['sku','name','category','ean','cost_eur','price_eur'],
  stock_balances:['warehouse_id','product_id','quality_status','on_hand','reserved'],
@@ -89,7 +90,7 @@ const ERP_COLUMNS={
  report_sales_by_month:['sales_month','channel_code','recorded_orders','order_face_value_eur','delivered_orders'],
  report_order_stage_kpis:['channel_code','total_orders','pending','shipped','delivered','order_face_value_eur']
 };
-const ERP_LABELS={id:'ID',external_order_id:'外部订单号',channel_code:'渠道',ordered_at:'下单时间',created_at:'创建时间',updated_at:'更新时间',customer_name:'客户姓名',order_status:'订单状态',total_eur:'金额 EUR',sku:'SKU',name:'名称',title:'标题',category:'分类',ean:'EAN',price_eur:'售价 EUR',cost_eur:'成本 EUR',low_stock_threshold:'低库存阈值',warehouse_id:'仓库 ID',product_id:'商品 ID',on_hand:'库存数量',reserved:'预留数量',quality_status:'质量状态',quantity_delta:'变动数量',reason:'原因',po_number:'采购单号',supplier:'供应商',status:'状态',shipment_number:'发货单号',carrier:'承运商',tracking_number:'物流单号',shipped_at:'发货时间',rma_number:'RMA 单号',return_status:'退换状态',inspection_status:'质检状态',ticket_number:'工单编号',priority:'优先级',payment_reference:'付款凭证',invoice_number:'发票号码',invoice_type:'发票类型',amount_eur:'金额 EUR',vat_eur:'VAT',brand:'品牌',model:'型号',grade:'成色',imei:'IMEI',task_type:'任务类型',assigned_role:'负责部门',due_at:'截止时间',source_sheet:'源表',source_status:'来源状态',product_family:'商品系列',validation_state:'数据验证',recorded_orders:'订单数量',sales_month:'月份',order_face_value_eur:'订单面额',delivered_orders:'签收订单',action:'操作',actor_id:'操作员',entity_type:'业务实体',entity_id:'关联 ID',user_id:'员工 ID',role:'角色',active:'启用',allowed_modules:'允许模块'};
+const ERP_LABELS={email:'邮箱',id:'ID',external_order_id:'外部订单号',channel_code:'渠道',ordered_at:'下单时间',created_at:'创建时间',updated_at:'更新时间',customer_name:'客户姓名',order_status:'订单状态',total_eur:'金额 EUR',sku:'SKU',name:'名称',title:'标题',category:'分类',ean:'EAN',price_eur:'售价 EUR',cost_eur:'成本 EUR',low_stock_threshold:'低库存阈值',warehouse_id:'仓库 ID',product_id:'商品 ID',on_hand:'库存数量',reserved:'预留数量',quality_status:'质量状态',quantity_delta:'变动数量',reason:'原因',po_number:'采购单号',supplier:'供应商',status:'状态',shipment_number:'发货单号',carrier:'承运商',tracking_number:'物流单号',shipped_at:'发货时间',rma_number:'RMA 单号',return_status:'退换状态',inspection_status:'质检状态',ticket_number:'工单编号',priority:'优先级',payment_reference:'付款凭证',invoice_number:'发票号码',invoice_type:'发票类型',amount_eur:'金额 EUR',vat_eur:'VAT',brand:'品牌',model:'型号',grade:'成色',imei:'IMEI',task_type:'任务类型',assigned_role:'负责部门',due_at:'截止时间',source_sheet:'源表',source_status:'来源状态',product_family:'商品系列',validation_state:'数据验证',recorded_orders:'订单数量',sales_month:'月份',order_face_value_eur:'订单面额',delivered_orders:'签收订单',action:'操作',actor_id:'操作员',entity_type:'业务实体',entity_id:'关联 ID',user_id:'员工 ID',role:'角色',active:'启用',allowed_modules:'允许模块'};
 const ERP_CACHE=new Map();
 let erpSelectedPage='dashboard',erpTab='',erpSearch='',erpOffset=0,erpRow=null,erpLoading=0;
 const ERP_MAX=1000;
@@ -159,6 +160,10 @@ function erpModal(html,title='详情 / 操作'){
 }
 async function erpData(name,refresh=false){
  if(!refresh&&ERP_CACHE.has(name))return ERP_CACHE.get(name);
+ if(name==='staff_roles'&&profile?.role==='admin'){
+  const items=await authorized('/rest/v1/rpc/rfriend_erp_staff_directory',{method:'POST',body:{}});
+  ERP_CACHE.set(name,items);return items;
+ }
  const view=ERP_VIEWS[name]||'rfriend_erp_'+name;
  const combined=[];
  for(let offset=0;offset<10000;offset+=ERP_MAX){
@@ -217,12 +222,18 @@ async function erpRenderModule(){
  '<button id="erpSearchRun">搜索</button><button id="erpReload">刷新数据</button>'+
  '<button id="erpExport">↓ 导出 CSV</button><button id="erpBulk">⇪ 批量导入</button>'+
  (ERP_CREATE[slug]===erpTab?'<button class="primary" id="erpAdd">＋ 新建</button>':'')+
+ (slug==='shipping'&&erpTab==='shipments'?'<button class="primary" id="erpManualShipment">＋ 手工发货</button>':'')+
+ (slug==='team'&&erpTab==='staff_roles'&&profile?.role==='admin'?'<button class="primary" id="erpStaffEdit">＋ 授予员工权限</button>':'')+
  '</div><div id="erpRecords"><p class="erp-empty">正在从 Supabase 读取…</p></div>','数据源：erp.'+erpTab+' · 角色：'+(profile?.role||'-'));
  document.querySelectorAll('[data-erp-tab]').forEach(b=>b.onclick=()=>{erpTab=b.dataset.erpTab;erpSearch='';erpOffset=0;render()});
  document.querySelector('#erpSearchRun').onclick=()=>{erpSearch=document.querySelector('#erpSearch').value.trim();erpOffset=0;erpDrawRows()};
  document.querySelector('#erpSearch').onkeydown=e=>{if(e.key==='Enter'){erpSearch=e.target.value.trim();erpOffset=0;erpDrawRows()}};
  document.querySelector('#erpReload').onclick=()=>{ERP_CACHE.delete(erpTab);erpDrawRows()};
  document.querySelector('#erpAdd')?.addEventListener('click',()=>erpOpenCreate(erpTab));
+ document.querySelector('#erpManualShipment')?.addEventListener('click',()=>{
+  const m=erpModal(shipmentView(),'手工发货 · 需仓库确认');bindPage();
+ });
+ document.querySelector('#erpStaffEdit')?.addEventListener('click',()=>erpStaffEditor());
  document.querySelector('#erpExport').onclick=async()=>{try{erpDownload(erpTab,await erpData(erpTab))}catch(e){notice(errorMessage(e),true)}};
  document.querySelector('#erpBulk').onclick=()=>erpBulkModal();
  await erpDrawRows();
@@ -258,6 +269,22 @@ function erpCsvParse(input){
  row.push(cell);if(row.some(x=>x.length))rows.push(row);
  if(quoted)throw new Error('CSV 双引号没有关闭');
  return rows;
+}
+function erpStaffEditor(){
+ const m=erpModal('<form id="erpStaffForm"><div class="erp-fields">'+
+ '<div class="erp-field"><label>员工邮箱（必须已在 Supabase Auth 验证）</label><input name="email" type="email" required></div>'+
+ '<div class="erp-field"><label>岗位角色</label><select name="role">'+['support','operations','warehouse','finance','admin'].map(k=>'<option value="'+k+'">'+k+'</option>').join('')+'</select></div>'+
+ '<div class="erp-field"><label>账号状态</label><select name="active"><option value="true">启用</option><option value="false">停用</option></select></div>'+
+ '</div><div class="erp-actions" style="margin-top:15px"><button type="submit" class="primary">保存角色和状态</button></div><p id="erpStaffStatus"></p></form>','员工与角色 · ERP');
+ m.querySelector('#erpStaffForm').onsubmit=async e=>{
+  e.preventDefault();const values=Object.fromEntries(new FormData(e.target));
+  const status=m.querySelector('#erpStaffStatus');const btn=e.target.querySelector('[type=submit]');btn.disabled=true;
+  try{const result=await authorized('/rest/v1/rpc/rfriend_erp_assign_staff',{method:'POST',
+   body:{p_email:values.email,p_role:values.role,p_active:values.active==='true'}});
+   ERP_CACHE.delete('staff_roles');status.style.color='#128257';status.textContent='员工权限已生效：'+values.email+' / '+values.role;
+  }catch(err){status.style.color='#b03432';status.textContent=errorMessage(err)}
+  finally{btn.disabled=false}
+ };
 }
 function erpBulkModal(){
  const m=erpModal('<p>上传 CSV 文件。系统会预览记录，只有明确支持的实体类型才允许写入生产数据库，单批最多 100 条。</p>'+
