@@ -229,7 +229,45 @@
    $('v4SourceRecord').onclick=()=>{erpTab='order_source_records';erpRenderModule()};
   }catch(e){if($('v4ReviewList'))$('v4ReviewList').textContent='订单复核接口失败：'+errorMessage(e)}
  }
- async function returnsPage(){
+ async function returnItemEditor(returnRow){
+  const [items,orderItems,imeis,catalog]=await Promise.all(
+   ['return_items','order_items','device_imeis','product_catalog'].map(x=>erpData(x,true)));
+  const mapProducts=new Map(catalog.map(p=>[p.id,p]));
+  const existing=items.filter(x=>x.return_id===returnRow.id);
+  const original=orderItems.filter(x=>x.order_id===returnRow.order_id);
+  const available=original.filter(oi=>mapProducts.get(oi.product_id)?.brand==='OPPO');
+  const content='<div class="message warn">仅 OPPO 商品可进入二手机库存。必须验证原订单商品、实收数量、质检结果与设备 IMEI，合格后将自动流转；资料不完整会显示待核。</div>'+
+   '<h3>本次退货明细</h3>'+
+   table(['原订单商品','数量','已收货','质检结果','IMEI 关联'],existing.map(x=>
+    '<tr><td>'+h(mapProducts.get(original.find(oi=>oi.id===x.order_item_id)?.product_id)?.product_name||x.order_item_id)+'</td>'+
+    '<td>'+h(x.quantity)+'</td><td>'+h(x.received_quantity)+'</td><td>'+h(x.inspection_result||'待质检')+'</td>'+
+    '<td>'+h(imeis.find(i=>i.id===x.imei_id)?.imei||'未绑定')+'</td></tr>'))+
+   '<div class="erp-actions" style="margin-top:15px"><button id="v4AddReturnLine" class="btn">＋ 录入原订单商品</button>'+
+   '<button id="v4InspectReturnLine" class="btn primary">单件质检／绑定 IMEI</button></div><p id="v4ReturnFeedback"></p>';
+  const modal=erpModal(content,'退货单明细与 IMEI 质检 · '+returnRow.rma_number);
+  modal.querySelector('#v4AddReturnLine').onclick=()=>{
+   if(!available.length){modal.querySelector('#v4ReturnFeedback').textContent='此订单没有已关联的 OPPO 原订单商品明细；请先补全原订单商品，不能凭退货描述生成二手机库存。';return}
+   modalForm('录入退货原订单商品',forms.select('order_item','OPPO 商品 / SKU',
+    available.map(oi=>[oi.id,(mapProducts.get(oi.product_id)?.product_name||oi.product_id)+' · '+(mapProducts.get(oi.product_id)?.sku||'')])) ,
+    async v=>saveViaRpc('rfriend_erp_add_return_line_v4',{
+      p_return_id:returnRow.id,p_order_item_id:v.order_item
+    },['return_items','returns_v4']));
+  };
+  modal.querySelector('#v4InspectReturnLine').onclick=()=>{
+   if(!existing.length){modal.querySelector('#v4ReturnFeedback').textContent='请先录入原订单商品明细。';return}
+   modalForm('单件商品质检与串码绑定',[
+    forms.select('line','退货商品',existing.map(x=>[x.id,
+     (mapProducts.get(original.find(oi=>oi.id===x.order_item_id)?.product_id)?.product_name||'商品')+' · '+x.id.slice(0,8)])),
+    forms.select('result','质检结果',[['sellable','合格，可流转 OPPO 二手机'],['repair','需维修'],['scrap','报废'],['disputed','争议']]),
+    forms.select('imei','本机 IMEI（合格时必选）',[['','暂不绑定'],...imeis.map(x=>[x.id,x.imei])])
+   ].join(''),async v=>{
+    await saveViaRpc('rfriend_erp_inspect_return_line_v4',{
+     p_return_line_id:v.line,p_result:v.result,p_imei_id:v.imei||null
+    },['return_items','returns_v4','used_devices','used_device_events']);
+   });
+  };
+ }
+async function returnsPage(){
   $('content').innerHTML=bar('退换货与 OPPO 二手机',
    '<button id="v4NewReturn" class="btn primary">＋ 新建退货／换货申请</button>',
    '退货质检确认合格后，只有原订单、单件数量、OPPO 品牌和 IMEI 可追溯的记录才自动转入二手机仓；不符合条件保持待核，不会重复入库。')+
@@ -248,11 +286,12 @@
      '<td>'+h(r.return_status)+'</td><td>'+h(r.inspection_status)+'</td><td>'+h(r.used_transfer_status)+'</td>'+
      '<td>'+h(r.refund_status)+'</td><td>'+r.item_lines+'</td>'+
      '<td>'+(['admin','operations','warehouse'].includes(role())?
-      '<button class="btn v4InspectReturn" data-i="'+i+'">质检</button> <button class="btn v4FinalizeReturn" data-i="'+i+'">验证流转</button>':'只读')+'</td></tr>'));
+      '<button class="btn v4ReturnLines" data-i="'+i+'">明细 / IMEI</button> <button class="btn v4InspectReturn" data-i="'+i+'">质检</button> <button class="btn v4FinalizeReturn" data-i="'+i+'">验证流转</button>':'只读')+'</td></tr>'));
    $('v4UsedList').innerHTML=table(['IMEI','品牌','型号','颜色','内存','等级','状态','来源'],
     used.filter(x=>String(x.brand).toUpperCase()==='OPPO').map(x=>'<tr><td>'+h(x.imei)+'</td><td>'+h(x.brand)+'</td><td>'+h(x.model)+'</td>'+
     '<td>'+h(x.color||'待核')+'</td><td>'+h(x.storage_variant||'待核')+'</td><td>'+h(x.grade)+'</td>'+
     '<td>'+h(x.status)+'</td><td>'+h(x.acquisition_source||'—')+'</td></tr>'));
+   $('v4ReturnsList').querySelectorAll('.v4ReturnLines').forEach(btn=>btn.onclick=()=>returnItemEditor(returns[Number(btn.dataset.i)]));
    $('v4ReturnsList').querySelectorAll('.v4InspectReturn').forEach(btn=>btn.onclick=()=>{
     const row=returns[Number(btn.dataset.i)];
     if(!['received','inspection'].includes(row.return_status)){alert('请先将退货状态流转到 received / inspection，才能质检。');return}
