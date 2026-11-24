@@ -207,6 +207,7 @@ function erpBindDetail(rows,table){
   const modal=erpModal('<dl class="erp-kv">'+Object.entries(row).map(([k,v])=>
    '<dt>'+erpEsc(ERP_LABELS[k]||k)+'</dt><dd>'+erpEsc(erpValue(v,k))+'</dd>').join('')+'</dl>'+workflow,
    ERP_MODULES[erpSelectedPage]?.title||table);
+  erpAttachPurchaseActions(modal,table,row);
   modal.querySelector('#erpStateForm')?.addEventListener('submit',async e=>{
    e.preventDefault();const body=Object.fromEntries(new FormData(e.target));
    const btn=e.target.querySelector('[type=submit]'),status=modal.querySelector('#erpStatusMsg');btn.disabled=true;
@@ -220,13 +221,65 @@ function erpBindDetail(rows,table){
   });
  });
 }
+function erpAttachPurchaseActions(modal,table,row){
+ if(table==='purchase_orders'&&row.status==='draft'&&['admin','operations','finance'].includes(profile?.role)){
+  const wrap=document.createElement('div');wrap.className='erp-toolbar';
+  wrap.innerHTML='<button id="erpAddPOLine" class="primary">＋ 添加采购商品行</button>';
+  modal.querySelector('.erp-modal-body').appendChild(wrap);
+  wrap.querySelector('#erpAddPOLine').onclick=async()=>{
+   const products=await erpData('products');
+   if(!products.length){alert('请先在商品管理中创建真实 SKU');return}
+   const body='<form id="erpPOLineForm"><div class="erp-fields"><div class="erp-field"><label>商品 SKU</label><select name="product" required>'+
+    products.map(p=>'<option value="'+erpEsc(p.id)+'">'+erpEsc(p.sku)+' · '+erpEsc(p.name)+'</option>').join('')+
+    '</select></div><div class="erp-field"><label>采购数量</label><input name="quantity" type="number" min="1" required></div>'+
+    '<div class="erp-field"><label>单价 EUR</label><input name="cost" type="number" min="0" step="0.01" required></div></div>'+
+    '<div class="erp-actions" style="margin-top:15px"><button type="submit" class="primary">添加采购行</button></div><p id="erpLineFeedback"></p></form>';
+   const old=modal.querySelector('#erpPOInline');old?.remove();
+   const area=document.createElement('div');area.id='erpPOInline';area.innerHTML=body;
+   modal.querySelector('.erp-modal-body').appendChild(area);
+   area.querySelector('#erpPOLineForm').onsubmit=async e=>{
+    e.preventDefault();const fd=Object.fromEntries(new FormData(e.target)),btn=e.target.querySelector('button');
+    btn.disabled=true;const feedback=area.querySelector('#erpLineFeedback');
+    try{
+     await authorized('/rest/v1/rpc/rfriend_erp_purchase_add_line',{method:'POST',
+      body:{p_po_id:row.id,p_product_id:fd.product,p_quantity:Number(fd.quantity),p_unit_cost_eur:Number(fd.cost)}});
+     feedback.textContent='采购明细已保存';feedback.style.color='#128257';ERP_CACHE.delete('purchase_items');
+    }catch(err){feedback.textContent=errorMessage(err);feedback.style.color='#b03432'}
+    finally{btn.disabled=false}
+   };
+  };
+ }
+ if(table==='purchase_items'&&['admin','operations','warehouse'].includes(profile?.role)){
+  const remain=Number(row.quantity)-Number(row.received_quantity);
+  if(remain<1)return;
+  const area=document.createElement('div');area.innerHTML='<div class="erp-blocked">请先确保采购单已批准并处于 ordered 或 part_received 状态。该动作会正式增加仓库库存并记录库存流水。</div>'+
+   '<form id="erpReceiveForm"><div class="erp-fields"><div class="erp-field"><label>本次收货数量（剩余 '+remain+'）</label><input type="number" name="quantity" min="1" max="'+remain+'" required></div></div>'+
+   '<div class="erp-actions" style="margin-top:15px"><button type="submit" class="primary">确认收货并入库</button></div><p id="erpReceiveFeedback"></p></form>';
+  modal.querySelector('.erp-modal-body').appendChild(area);
+  area.querySelector('#erpReceiveForm').onsubmit=async e=>{
+   e.preventDefault();const btn=e.target.querySelector('button'),quantity=Number(e.target.elements.quantity.value);
+   btn.disabled=true;const status=area.querySelector('#erpReceiveFeedback');
+   try{
+    const result=await authorized('/rest/v1/rpc/rfriend_erp_receive_purchase_line',{method:'POST',
+     body:{p_item_id:row.id,p_quantity:quantity,p_idempotency_key:crypto.randomUUID()}});
+    status.textContent='仓库正式入库成功：'+quantity+' 件，流水 '+result.movement_id;status.style.color='#128257';
+    for(const key of ['purchase_items','purchase_orders','stock_balances','inventory_movements'])ERP_CACHE.delete(key);
+   }catch(err){status.textContent=errorMessage(err);status.style.color='#b03432';btn.disabled=false}
+  };
+ }
+}
 function erpTitle(id){return ERP_NAV.find(x=>x[0]===id)?.[lang==='en'?3:2]||'经营总览'}
-function erpOpenCreate(entity){
+async function erpOpenCreate(entity){
  const defs=ERP_FIELDS[entity];if(!defs){erpModal('<p>该模块的创建动作尚未开放服务端接口。</p>');return}
+ const [availableWarehouses,availableChannels]=await Promise.all([
+  erpData('warehouses').catch(()=>[]),erpData('channels').catch(()=>[])]);
  const items=defs.map(([key,label,type='text',required])=>{
   const select=type.startsWith('select:');
   return '<div class="erp-field '+(key==='description'?'wide':'')+'"><label>'+erpEsc(label)+'</label>'+
-  (select?'<select name="'+key+'">'+type.slice(7).split('|').map(v=>'<option value="'+erpEsc(v)+'">'+erpEsc(v)+'</option>').join('')+'</select>':
+  ((key==='warehouse_id'||key==='channel_id')?
+   '<select name="'+key+'" '+(required?'required':'')+'><option value="">选择'+erpEsc(label)+'</option>'+
+   (key==='warehouse_id'?availableWarehouses:availableChannels).map(x=>'<option value="'+erpEsc(x.id)+'">'+erpEsc(x.name||x.code)+'</option>').join('')+'</select>':
+   select?'<select name="'+key+'">'+type.slice(7).split('|').map(v=>'<option value="'+erpEsc(v)+'">'+erpEsc(v)+'</option>').join('')+'</select>':
   key==='description'?'<textarea name="'+key+'" '+(required?'required':'')+'></textarea>':
   '<input name="'+key+'" type="'+type+'" '+(required?'required':'')+'></div>');
  });
