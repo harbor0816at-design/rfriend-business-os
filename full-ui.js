@@ -244,15 +244,27 @@ async function erpData(name,refresh=false){
   const items=await authorized('/rest/v1/rpc/rfriend_erp_staff_directory',{method:'POST',body:{}});
   ERP_CACHE.set(name,items);return items;
  }
+ if(name==='orders'&&orders.length){
+  ERP_CACHE.set(name,orders);return orders;
+ }
  const view=ERP_VIEWS[name]||'rfriend_erp_'+name;
+ const orderBy={
+  stock_balances:'warehouse_id.asc,product_id.asc,quality_status.asc',
+  channels:'code.asc',warehouses:'code.asc',role_definitions:'code.asc',
+  source_logistics_evidence:'source_record_id.asc',
+  source_product_matches:'source_record_id.asc',
+  product_keyword_rules:'priority.asc,id.asc'
+ }[name]||(['report_channel_order_intake','report_operations_pipeline','report_order_dates_quality','report_order_lifecycle','report_order_linkage','report_order_stage_kpis','report_review_queue','report_sales_by_month','report_source_product_mix','report_workflow_summary'].includes(name)?'': 'id.asc');
  const combined=[];
- for(let offset=0;offset<10000;offset+=ERP_MAX){
-  const data=await authorized('/rest/v1/'+view+'?select=*&limit='+ERP_MAX+'&offset='+offset);
+ const maxRows=20000;
+ for(let offset=0;offset<maxRows;offset+=ERP_MAX){
+  const query='/rest/v1/'+view+'?select=*'+(orderBy?'&order='+orderBy:'')+'&limit='+ERP_MAX+'&offset='+offset;
+  const data=await authorized(query);
   if(!Array.isArray(data))throw new Error('Unexpected database response for '+name);
   combined.push(...data);
-  if(data.length<ERP_MAX)break;
+  if(data.length<ERP_MAX){ERP_CACHE.set(name,combined);return combined}
  }
- ERP_CACHE.set(name,combined);return combined;
+ throw new Error('The table exceeds the 20,000-row page safety limit: '+name+'. No partial records shown.');
 }
 function erpCSV(rows){if(!rows.length)return '';const keys=Object.keys(rows[0]);return [keys,...rows.map(o=>keys.map(k=>o[k]))].map(row=>row.map(v=>'"'+String((typeof v==='object'?JSON.stringify(v):v)??'').replaceAll('"','""')+'"').join(',')).join('\r\n')}
 function erpDownload(name,rows){
@@ -610,7 +622,7 @@ function erpBulkModal(){
 }
 async function erpDashboard(){
  el('content').innerHTML='<div class="erp-topline">销售、库存和风险 · 生产数据库</div><div id="erpSummary" class="cards"></div>'+
- '<div class="message" style="margin-bottom:16px">欢迎使用 Rfriend Business OS。销售订单和工作台读取真实 Supabase 数据；库存仅统计已正式入账的记录。历史订单金额是面额，不等同财务确认的净销售额。</div>'+
+ '<div class="message" style="margin-bottom:16px">订单总数按渠道与平台订单号唯一归档，客户端跨页读取所有记录；原始导入行数不同于订单数量。历史订单金额是面额，不等同财务确认的净销售额。</div>'+
  '<div class="erp-grid"><div id="erpSalesPanel"></div><div id="erpRiskPanel"></div></div>';
  const sum=el('erpSummary'),sales=el('erpSalesPanel'),risk=el('erpRiskPanel');
  try{
@@ -620,7 +632,7 @@ async function erpDashboard(){
   const onhand=stock.reduce((n,r)=>n+Number(r.on_hand||0),0);
   const totalValue=orders.reduce((n,r)=>n+Number(r.total_eur||0),0);
   const open=disputes.filter(x=>!['resolved','closed','done'].includes(x.case_status)).length;
-  if(sum)sum.innerHTML=erpMetric('销售订单',orders.length,'已导入订单记录')+
+  if(sum)sum.innerHTML=erpMetric('历史订单总量',orders.length,'全部分页加载 · 实际订单口径')+
    erpMetric('库存总件数',onhand,'仅正式库存台账')+
    erpMetric('订单金额面额',eur(totalValue),'并非净销售额')+
    erpMetric('待核查异常',open,'历史导入对账问题');
