@@ -22,7 +22,7 @@
  }
  const num=x=>Number(x||0).toLocaleString('de-AT');
  const percent=(a,b)=>b?((a/b)*100).toFixed(2)+'%':'—';
- const warning='数据口径：退货率＝存在退货单的独立订单数 ÷ 历史订单总数；取消率＝当前订单状态为 cancelled 的独立订单数 ÷ 历史订单总数。仅代表 ERP 已登记的订单与退货，不等同渠道平台最终财务结算率。';
+ const warning='数据口径：ERP退货率＝存在非拒绝退货申请的独立订单数 ÷ 历史订单总数；取消率＝当前订单状态为 cancelled 的独立订单数 ÷ 历史订单总数。仅代表 ERP 已登记的订单与退货，不等同渠道平台最终财务结算率。';
  async function savePrefs(){
   const old=await pref();
   const m=erpModal('<p>选择首页希望看到的业务模块。配置保存到你的 ERP 员工账号，管理员可以展示全部领域。</p>'+
@@ -78,7 +78,7 @@
   header.querySelector('#v4ConfigureHome').onclick=savePrefs;
   const v=await load();if(!$('v4HomeSections'))return;
   const rowCount=orders.length, cancellations=orders.filter(o=>o.order_status==='cancelled').length;
-  const returned=v.returns.rows?new Set(v.returns.rows.map(x=>x.order_id).filter(Boolean)).size:null;
+  const returned=v.returns.rows?new Set(v.returns.rows.filter(x=>x.type==='return'&&x.return_status!=='rejected').map(x=>x.order_id).filter(Boolean)).size:null;
   const support=v.service.rows||[],open=support.filter(t=>!['closed','resolved'].includes(t.status));
   const inv=v.inventory.rows||[],stockTotal=inv.reduce((sum,o)=>sum+Number(o.on_hand||0),0);
   const stockAvailable=inv.reduce((sum,o)=>sum+(o.quality_status==='sellable'?Math.max(0,Number(o.on_hand||0)-Number(o.reserved||0)):0),0);
@@ -95,7 +95,7 @@
    ['可售库存',v.inventory.error?'无权限':num(stockAvailable),'扣除预留'],['仓库/SKU库存行',v.inventory.error?'无权限':num(inv.length),'包含质量状态']
   ]));
   if(current.includes('returns'))out.push(cardsFor('returns',[
-   ['退货率',returned===null?'无权限':percent(returned,rowCount),'独立退货订单 / 历史订单'],
+   ['ERP退货率',returned===null?'无权限':percent(returned,rowCount),'非拒绝退货申请订单 / 历史订单'],
    ['取消率',percent(cancellations,rowCount),'cancelled / 历史订单'],
    ['退换货申请',v.returns.error?'无权限':num(v.returns.rows.length),'含换货'],
    ['已流转二手机',v.returns.error?'无权限':num(v.returns.rows.filter(r=>r.used_transfer_status==='transferred').length),'经质检和串码核验']
