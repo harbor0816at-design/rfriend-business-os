@@ -104,3 +104,44 @@ The CSV template columns are `warehouse_code,sku,quality_status,source,observed_
 ### Test evidence
 
 Verified RLS-admin counts: 2,490 orders in the pivot and 207 weekly stock lines. A full two-user request → second-user approval → movement transaction test passed inside `BEGIN … ROLLBACK`. The test left **zero** adjustment requests and zero external count records.
+
+## v4 accepted workflows (2026-11-24)
+
+The approved v3 visual navigation is retained; used devices and returns are consolidated into **售后与二手机** (returns includes used devices and refund list).
+
+### 1) Product / procurement / stock
+- 69 OPPO source SKUs are retained; backfilled model and color from explicit existing name/variant, and memory version when explicitly supplied (67 of 69 present or non-applicable; two do not contain memory data).
+- Purchasing shows SKU, product name, model, color, memory, requested quantity, received quantity, expected warehouse arrival date. The ETA lives on each `purchase_items` record.
+- Weekly stock audit shows product name/model/color/memory; DOS original forecasting remains accessible from a second tab.
+- All new changes are authenticated and audited by Supabase backend.
+
+### 2) Returns / only-OPPO used inventory
+- Return lines can be added only if they reference an actual OPPO original order item.
+- Inspect each return line and associate a registered IMEI. Once the return and its items are verified `sellable`, a guarded database trigger moves the device into `erp.used_devices` under the used warehouse.
+- The transfer is idempotent by IMEI, records its originating return item and used-device events, and **does not increase new-device inventory**.
+- Incomplete lines are shown as `pending_data`; conflicts are `blocked`; never auto-sell non-OPPO devices.
+- OPPO-only check constraint on `erp.used_devices`.
+
+### 3) Service tickets
+- Required customer name and phone and/or email, source (WhatsApp/email/telephone/internal), complaint type (pre-sales/after-sales/quality/complaint).
+- Creation date, responsible user, case status, 24h/48h/72h+ escalation; database cron runs at 5 minutes past each UTC hour, in-app alerts are recorded for each 24h threshold until closure.
+
+### 4) Review routing
+- Review queue includes order, source file/row, issue category, source notes, specific anomaly details, severity and responsible role/user.
+- Assignment generates or updates an open work task, with audit log.
+
+### 5) Executive dashboard & return/cancel metrics
+- User-selected KPI sections saved per authenticated ERP user in `erp.dashboard_preferences`; admin defaults to all sections.
+- Sales: historical order count, today's orders and past 7-day daily trend.
+- Inventory: overall and sellable stock.
+- Service: open tickets and 24h/48h/72h escalation.
+- Returns: **ERP return request rate** = distinct orders with non-rejected return requests / total historical orders (exclude exchanges); **ERP cancellation rate** = cancelled orders / all historical orders.
+- Finance: refund requests, review queue and amounts explicitly marked paid in ERP ledger; does not independently verify bank settlement.
+- Operations: anomalies assigned and awaiting review.
+- Existing order pivot drill-down remains available below when Sales is selected.
+
+### Current rollout caveats
+- Some original orders lack item-level links and thus cannot automatically create used-device inventory from a return until order-item and IMEI evidence is recorded.
+- Actual external warehouse sync, payment provider refund execution, and native invoice generation remain pending integration.
+- New UI files: `operations-v4.js` and `dashboard-v4.js`. Build/syntax checked and committed. A GitHub Vercel commit status marked success, but a verified authenticated production-browser acceptance test is still needed.
+- Rollback-only SQL tests covered ticket creation, purchase with ETA, review assignment, and OPPO return line → inspection → used transfer; no QA test orders were retained.
