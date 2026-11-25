@@ -145,3 +145,26 @@ The approved v3 visual navigation is retained; used devices and returns are cons
 - Actual external warehouse sync, payment provider refund execution, and native invoice generation remain pending integration.
 - New UI files: `operations-v4.js` and `dashboard-v4.js`. Build/syntax checked and committed. A GitHub Vercel commit status marked success, but a verified authenticated production-browser acceptance test is still needed.
 - Rollback-only SQL tests covered ticket creation, purchase with ETA, review assignment, and OPPO return line → inspection → used transfer; no QA test orders were retained.
+
+## v5: IMEI-first inventory and field-specific order reconciliation (2026-11-25)
+
+**Approved UI navigation:** Keep the accepted Rfriend Business OS v3 theme and its six primary groups. Separate secondary modules **退换货管理** (returns/refunds/inspection) and **二手机业务** (OPPO used stock, IMEI reservation, order fulfillment). Rename **IMEI 全链路追踪** for all warehouses.
+
+**Physical goods:**
+- Phones/tablets are serialized by 15-digit IMEI in `erp.device_imeis`; every in-scope IMEI receipt, transfer, shipment, and return movement emits `erp.imei_movements` and corresponding SKU stock ledger changes.
+- A legacy SKU stock balance can be linked to actual scanned IMEIs using `tag_existing` without increasing inventory. Never fabricate IMEIs.
+- Purchase goods require `rfriend_erp_receive_purchase_imei` per unit; legacy bulk receiving refuses phone/tablet SKUs.
+- New sales shipment `rfriend_erp_ship_new_imei` checks the real order line product and remaining quantity, requires courier and tracking.
+- Returns require an original OPPO order line. Receive each return IMEI physically into a quarantine warehouse using `rfriend_erp_receive_return_imei`; passing per-device quality inspection then moves the unit from quarantine to used stock and writes both warehouse movements.
+- Used devices remain OPPO-only and are reserved by unique IMEI on a used sales order. `rfriend_erp_used_order_ship` requires order ID, bound IMEI, courier and tracking number, decrements stock and adds an IMEI trace event. Cannot ship twice.
+- Accessories and goods with no manufacturer IMEI are not assigned fictitious IMEIs; they still require SKU/EAN and their own inventory controls. Historical 2,221 units must be serial-scanned before per-unit trace can exist.
+
+**Order review and product descriptions:**
+- `public.rfriend_erp_order_products_v5`: one record per historical order (2,490). Product names come first from fully linked catalog items, otherwise from verbatim order-source product descriptions; unmatched names are clearly flagged.
+- 2,489 historical orders have usable source descriptions, 1 has no product description. The source description is not yet a confirmed standardized product-item mapping; do not imply otherwise.
+- `public.rfriend_erp_order_review_details_v5`: 599 cases with multiple specific field flags (time, product, amount, order number, duplicate number, return/status). Reviewing a case preserves the original product/source record and routes assignment to responsible employee task.
+- Sales orders, review queue, returns, refunds, IMEI traces, and new/used shipping UI show human-readable product names/model/color/memory instead of only SKU/UUID.
+
+**Validation:** Transaction rollback scenarios passed for IMEI receiving, warehouse transfer, full new-device outbound, used-device order/IMEI shipping with courier tracking, and OPPO quarantine return → QC → used warehouse transfer with exact stock debit/credit and serial trace. No test business records remain.
+
+**Deployment caveat:** GitHub code and database RPCs are updated; confirm the latest commit is Ready in Vercel and perform authenticated browser acceptance. External automatic WMS import and backfilling historic IMEIs remain outstanding.
