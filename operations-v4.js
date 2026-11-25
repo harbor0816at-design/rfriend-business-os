@@ -242,7 +242,8 @@
     '<tr><td>'+h(mapProducts.get(original.find(oi=>oi.id===x.order_item_id)?.product_id)?.product_name||x.order_item_id)+'</td>'+
     '<td>'+h(x.quantity)+'</td><td>'+h(x.received_quantity)+'</td><td>'+h(x.inspection_result||'待质检')+'</td>'+
     '<td>'+h(imeis.find(i=>i.id===x.imei_id)?.imei||'未绑定')+'</td></tr>'))+
-   '<div class="erp-actions" style="margin-top:15px"><button id="v4AddReturnLine" class="btn">＋ 录入原订单商品</button>'+
+   '<div class="erp-actions" style="margin-top:15px"><button id="v4AddReturnLine" class="btn">＋ 录入原订单商品</button>'+ 
+   '<button id="v4ReceiveReturnIMEI" class="btn">↓ IMEI 扫码收货 / 隔离入库</button>'+
    '<button id="v4InspectReturnLine" class="btn primary">单件质检／绑定 IMEI</button></div><p id="v4ReturnFeedback"></p>';
   const modal=erpModal(content,'退货单明细与 IMEI 质检 · '+returnRow.rma_number);
   modal.querySelector('#v4AddReturnLine').onclick=()=>{
@@ -252,6 +253,22 @@
     async v=>saveViaRpc('rfriend_erp_add_return_line_v4',{
       p_return_id:returnRow.id,p_order_item_id:v.order_item
     },['return_items','returns_v4']));
+  };
+  modal.querySelector('#v4ReceiveReturnIMEI').onclick=async()=>{
+   const waiting=existing.filter(x=>!x.received_quantity);
+   if(!waiting.length){modal.querySelector('#v4ReturnFeedback').textContent='没有待收货的 OPPO 退货明细；请先添加原订单商品。';return}
+   const warehouses=(await erpData('warehouses')).filter(w=>w.is_active&&w.code!=='used');
+   modalForm('按 IMEI 扫码接收退货（隔离仓）',[
+    forms.select('line','退货订单商品',waiting.map(x=>[x.id,
+      mapProducts.get(original.find(oi=>oi.id===x.order_item_id)?.product_id)?.product_name||x.id])),
+    forms.input('imei','退货实物 IMEI（15 位数字）'),
+    forms.select('warehouse','实际接收仓库',warehouses.map(w=>[w.id,w.name||w.code])),
+    forms.input('reference','实际收货凭证号')
+   ].join(''),async v=>{
+    await saveViaRpc('rfriend_erp_receive_return_imei',{
+     p_return_line_id:v.line,p_imei:v.imei,p_warehouse_id:v.warehouse,p_reference:v.reference
+    },['return_items','returns_v4','device_imeis','imei_trace','imei_register','stock_balances','inventory_v4']);
+   });
   };
   modal.querySelector('#v4InspectReturnLine').onclick=()=>{
    if(!existing.length){modal.querySelector('#v4ReturnFeedback').textContent='请先录入原订单商品明细。';return}
