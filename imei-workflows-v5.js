@@ -5,7 +5,7 @@
  const h=x=>erpEsc(x??'');
  const canWrite=()=>['admin','operations','warehouse'].includes(profile?.role);
  const xdate=x=>x?String(x).replace('T',' ').slice(0,16):'—';
- const opName={register_existing:'历史库存绑定',purchase_receipt:'采购入库',manual_receipt:'新机入库',
+ const opName={register_existing:'历史库存绑定',purchase_receipt:'采购入库',manual_receipt:'新机入库',return_receipt:'退货扫码隔离入库',
   warehouse_transfer:'仓库调拨',sales_shipment:'全新机销售出库',used_shipment:'二手机销售出库',
   return_used_receipt:'退货合格转二手机仓'};
  let allWarehouse=[],allProducts=[],allChannels=[];
