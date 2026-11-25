@@ -305,6 +305,8 @@ async function erpData(name,refresh=false){
  const orderBy={
   stock_balances:'warehouse_id.asc,product_id.asc,quality_status.asc',
   inventory_v4:'warehouse_code.asc,sku.asc,quality_status.asc',
+  purchase_tracking:'po_number.asc,id.asc',
+  purchase_delivery_alerts:'alert_created_at.desc,id.asc',
   imei_trace:'created_at.desc,id.asc',
   imei_register:'imei.asc',
   used_orders_trace:'ordered_at.desc,used_order_id.asc',
@@ -792,6 +794,7 @@ async function erpRenderPage(){
   }
   return;
  }
+ if(erpSelectedPage==='purchase'&&typeof window.erpProcurementTracking==='function'){await window.erpProcurementTracking();return;}
  if(typeof window.erpV5OrderPage==='function'&&await window.erpV5OrderPage(erpSelectedPage))return;
  if(typeof window.erpV5Page==='function'&&await window.erpV5Page(erpSelectedPage))return;
  if(typeof window.erpV4Page==='function'&&await window.erpV4Page(erpSelectedPage))return;
