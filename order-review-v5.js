@@ -47,6 +47,27 @@
    }catch(err){msg.textContent=errorMessage(err);msg.style.color='#bd3737';btn.disabled=false}
   };
  }
+ async function resolveCase(row){
+  const m=erpModal('<p>订单：'+h(row.order_number)+'</p>'+
+   '<p><strong>逐项核实：</strong>'+flags(row.fields_to_verify)+'</p>'+
+   '<p class="message warn">仅在核对平台订单、原始明细或仓库凭证后结案。此操作记录核对结论及证据，不会擅自修改原始文件或金额。</p>'+
+   '<form id="v5ResolveForm"><div class="v5-fields">'+
+   '<label>每项核对结论及确认值<textarea class="control" required minlength="12" maxlength="4000" rows="4" name="resolution" placeholder="如：订单金额已与平台明细确认，实际为 €...；订单日期经对账确认为..."></textarea></label>'+
+   '<label>核对依据／平台订单／源文件／工单编号<input class="control" required minlength="5" maxlength="500" name="evidence"></label>'+
+   '</div><div class="erp-actions" style="margin-top:14px"><button class="primary" type="submit">确认复核完成</button></div><p id="v5ResolveMsg"></p></form>',
+   '完成订单待确认项');
+  m.querySelector('#v5ResolveForm').onsubmit=async e=>{
+   e.preventDefault();const v=Object.fromEntries(new FormData(e.target)),btn=e.target.querySelector('button'),msg=m.querySelector('#v5ResolveMsg');
+   btn.disabled=true;
+   try{
+    await authorized('/rest/v1/rpc/rfriend_erp_resolve_review_case',{method:'POST',
+     body:{p_case_id:row.id,p_resolution:v.resolution,p_evidence_reference:v.evidence}});
+    for(const k of ['order_review_details_v5','review_queue','reconciliation_cases','work_tasks'])ERP_CACHE.delete(k);
+    msg.style.color='#128257';msg.textContent='复核完成，已存档结论及来源凭证';
+    setTimeout(()=>{m.remove();render()},300);
+   }catch(err){msg.textContent=errorMessage(err);msg.style.color='#bd3737';btn.disabled=false}
+  };
+ }
  async function reviewPage(){
   el('content').innerHTML='<div class="erp-topline">订单数据质量 · 逐单明确待确认字段 / 关联商品名称 / 负责人流转</div>'+
    '<div class="message">异常分为下单时间、商品、金额、订单号、重复单、退货状态等。一条记录可以同时需要复核多个字段，页面显示源文件依据，不把缺失值自动补造成正确值。</div>'+
@@ -77,8 +98,9 @@
       '<td><div class="v5-product-text">'+h(x.anomaly_detail||x.notes||'未填写异常说明')+'</div>'+
       '<small class="v5-subline">'+h(x.source_file_id||'未知来源')+' / '+h(x.source_sheet||'')+' / 第'+h(x.source_row||'?')+'行</small></td>'+
       '<td>'+h(x.case_status)+'<small class="v5-subline">'+h(x.assigned_role||'未指派')+'</small></td>'+
-      '<td>'+(['open','in_review'].includes(x.case_status)?'<button class="btn v5ReviewAction" data-i="'+i+'">核实 / 指派</button>':'—')+'</td></tr>'));
+      '<td>'+(['open','in_review'].includes(x.case_status)?'<button class="btn v5ReviewAction" data-i="'+i+'">核实 / 指派</button> <button class="btn v5ResolveAction" data-i="'+i+'">填写结论 / 结案</button>':'—')+'</td></tr>'));
     $('v5ReviewTable').querySelectorAll('.v5ReviewAction').forEach(b=>b.onclick=()=>assignment(filtered[Number(b.dataset.i)]));
+    $('v5ReviewTable').querySelectorAll('.v5ResolveAction').forEach(b=>b.onclick=()=>resolveCase(filtered[Number(b.dataset.i)]));
     if(filtered.length>500)$('v5ReviewTable').insertAdjacentHTML('beforeend','<p class="erp-mini">展示前500条，导出包含当前筛选全部 '+filtered.length+' 条。</p>');
    }
    for(const id of ['v5ReviewSearch','v5ReviewField','v5ReviewStatus'])$(id).addEventListener('input',draw);
