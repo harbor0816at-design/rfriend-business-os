@@ -168,3 +168,23 @@ The approved v3 visual navigation is retained; used devices and returns are cons
 **Validation:** Transaction rollback scenarios passed for IMEI receiving, warehouse transfer, full new-device outbound, used-device order/IMEI shipping with courier tracking, and OPPO quarantine return → QC → used warehouse transfer with exact stock debit/credit and serial trace. No test business records remain.
 
 **Deployment caveat:** GitHub code and database RPCs are updated; confirm the latest commit is Ready in Vercel and perform authenticated browser acceptance. External automatic WMS import and backfilling historic IMEIs remain outstanding.
+
+## v6 — Purchase ETA alerts and human-verified sales order import
+
+### Procurement
+- `public.rfriend_erp_purchase_tracking` shows PO number, supplier, human-readable product name/model/color/memory, SKU, ordered quantity, arrived quantity, outstanding quantity, formal `ordered_at`, supplier ETA, actual first/last receipt timestamps, warehouse and urgency.
+- `erp.purchase_orders.ordered_at` is set automatically on transition to `ordered`, distinct from `created_at`; actual arrival comes only from inventory movements referencing the purchase line.
+- Dashboard flags missing ETA, due in three days, due today, overdue, and partially received but overdue. Hourly `cron.job` `rfriend-erp-purchase-eta-hourly` at UTC minute 15 records alert rows, viewable via authorized data. This is an in-app/database alert, **not an external push email or WhatsApp notification**.
+- ETA edits require a reason and are audited. Serialized phones/tablets must receive one IMEI at a time; nonserialized goods use the existing quantity receipt.
+- Purchase creation, line addition and approval actions retained.
+
+### Sales input
+- **Manual one-at-a-time**: select sales channel and exact SKU, enter order number, quantity and time, review checkbox, then submit.
+- **Batch CSV**: source CSV is parsed to an editable grid. Each row is checked for order number, channel, exact catalog SKU, quantity and timestamp; records must be deliberately confirmed. The server validates and atomically posts batches up to 100.
+- **Fuzzy text**: rule-based local candidate extraction from pasted order text (not an LLM guarantee). Extracts probable order number, product, quantity, time and amount. Every item starts unchecked and requires manual correction/confirmation. No unreviewed fuzzy result writes production data.
+- `public.rfriend_erp_confirm_sales_orders(jsonb,text)` enforces authorization, existing active channel/SKU, ISO timezone-aware time, positive integer quantity and uniqueness of channel/order number. It creates `erp.orders`, `erp.order_items`, source evidence and audit entries in one transaction. Batch import can be partly committed **between 100-row chunks**; each chunk is atomic.
+- Date-time fields displayed in the operator's **browser local timezone** and saved with UTC offset. For cross-timezone teams, review local time before confirming.
+
+### Validation
+- Postgres rollback tests passed: new sales order, correct SKU/quantity/time/source; purchase PO approval -> stamped order time -> overdue ETA -> per-IMEI partial receipt -> actual first/last arrival -> remaining stock/alert. No QA data retained.
+- All new JS files passed JavaScript syntax validation and appear in `index.html`.
