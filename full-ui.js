@@ -11,21 +11,22 @@ const ERP_NAV=[
  ['movements','☰','库存流水','Stock movements'],
  ['purchase','↓','采购管理','Purchasing'],
  ['shipping','➜','发货履约','Shipping'],
- ['returns','↩','退换货与二手机','Returns & Used Devices'],
+ ['returns','↩','退换货管理','Returns & Exchanges'],
+ ['used','◈','二手机业务','Used Devices'],
  ['tickets','☏','售后工单','Customer service'],
  ['finance','€','财务发票','Finance & invoices'],
  ['reports','▥','经营报告','Reports'],
  ['audit','☷','操作日志','Audit trail'],
  ['settings','⚙','设置与备份','Settings'],
  ['team','♧','员工与角色','Employees & roles'],
- ['imei','⌗','串码识别','IMEI recognition']
+ ['imei','⌗','IMEI 全链路追踪','IMEI Trace']
 ];
 // Navigation structure strictly follows the user-approved Business OS v3 HTML.
 const ERP_GROUPS=[
  ['workspace','工作台','Workspace',['dashboard','tasks']],
  ['sales','销售与履约','Sales & Fulfillment',['intake','orders','shipping']],
  ['stock','采购与库存','Procurement & Inventory',['purchase','products','inventory','movements','imei']],
- ['service','售后与二手机','Service & Used Devices',['tickets','returns']],
+ ['service','售后与二手机','Service & Used Devices',['tickets','returns','used']],
  ['finance','财务管理','Finance',['finance']],
  ['insights','分析与系统','Insights & Administration',['reports','audit','team','settings']]
 ];
@@ -83,13 +84,13 @@ const ERP_MODULES={
  inventory:{title:'库存管理',en:'Inventory',tables:[['stock_balances','仓库库存']]},
  purchase:{title:'采购管理',en:'Purchasing',tables:[['purchase_orders','采购单'],['purchase_items','采购明细']]},
  shipping:{title:'发货履约',en:'Shipping',tables:[['shipments','正式出货记录'],['source_logistics_evidence','历史物流凭证']]},
- returns:{title:'退换货与二手机',en:'Returns & Used Devices',tables:[['returns','退换货申请'],['return_items','质检明细'],['used_devices','OPPO 二手机库存'],['used_inspections','二手机质检'],['refunds','退款记录']]},
+ returns:{title:'退换货管理',en:'Returns & Exchanges',tables:[['returns','退换货申请'],['return_items','质检明细'],['refunds','退款记录']]},
  used:{title:'二手机业务',en:'Used devices',tables:[['used_devices','二手机台账'],['used_inspections','质检报告'],['used_orders','二手机订单'],['used_device_events','状态流水']]},
  tickets:{title:'售后工单',en:'Customer service',tables:[['tickets','售后工单'],['ticket_events','跟进事件']]},
  finance:{title:'财务发票',en:'Finance & invoices',tables:[['refunds','退款台账'],['invoices','发票台账']]},
  audit:{title:'操作日志',en:'Audit trail',tables:[['audit_events','真实审计流水']]},
  team:{title:'员工与角色',en:'Employees & roles',tables:[['staff_roles','员工角色'],['role_definitions','角色权限定义']]},
- imei:{title:'串码识别',en:'IMEI recognition',tables:[['device_imeis','设备串码'],['imei_recognition_reviews','待核查识别结果']]},
+ imei:{title:'IMEI 全链路追踪',en:'IMEI Trace',tables:[['device_imeis','设备串码'],['imei_recognition_reviews','待核查识别结果']]},
  settings:{title:'设置与备份',en:'Settings',tables:[['channels','渠道配置'],['warehouses','仓库配置'],['product_keyword_rules','自动识别规则']]},
  reports:{title:'经营报告',en:'Business reports',tables:[['report_sales_by_month','月度渠道销售'],['report_order_stage_kpis','订单阶段分布'],['report_order_dates_quality','订单时间完整性'],['report_order_lifecycle','订单生命周期'],['report_source_product_mix','产品结构'],['report_review_queue','待核对队列'],['report_workflow_summary','工作流摘要']]}
 };
@@ -304,6 +305,9 @@ async function erpData(name,refresh=false){
  const orderBy={
   stock_balances:'warehouse_id.asc,product_id.asc,quality_status.asc',
   inventory_v4:'warehouse_code.asc,sku.asc,quality_status.asc',
+  imei_trace:'created_at.desc,id.asc',
+  imei_register:'imei.asc',
+  used_orders_trace:'ordered_at.desc,used_order_id.asc',
   inventory_weekly_snapshots:'week_start.desc,warehouse_id.asc,product_id.asc,quality_status.asc',
   inventory_external_counts:'week_start.desc,warehouse_id.asc,product_id.asc,quality_status.asc,source.asc',
   inventory_adjustment_requests:'requested_at.desc,id.asc',inventory_dos:'product_id.asc,lookback_days.asc',
@@ -787,6 +791,7 @@ async function erpRenderPage(){
   }
   return;
  }
+ if(typeof window.erpV5Page==='function'&&await window.erpV5Page(erpSelectedPage))return;
  if(typeof window.erpV4Page==='function'&&await window.erpV4Page(erpSelectedPage))return;
  if(!ERP_MODULES[erpSelectedPage])return;
  await erpRenderModule();
