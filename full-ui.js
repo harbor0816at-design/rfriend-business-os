@@ -308,6 +308,7 @@ async function erpData(name,refresh=false){
   imei_trace:'created_at.desc,id.asc',
   imei_register:'imei.asc',
   used_orders_trace:'ordered_at.desc,used_order_id.asc',
+  used_orders_v5:'ordered_at.desc,used_order_id.asc',
   inventory_weekly_snapshots:'week_start.desc,warehouse_id.asc,product_id.asc,quality_status.asc',
   inventory_external_counts:'week_start.desc,warehouse_id.asc,product_id.asc,quality_status.asc,source.asc',
   inventory_adjustment_requests:'requested_at.desc,id.asc',inventory_dos:'product_id.asc,lookback_days.asc',
