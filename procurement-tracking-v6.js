@@ -44,6 +44,25 @@
     v=>rpc('rfriend_erp_receive_purchase_line',{p_item_id:row.id,p_quantity:Number(v.qty),p_idempotency_key:'po-line-'+row.id+'-'+v.reference.trim()}));
   }
  }
+ function addLine(poRow){
+  const valid=products.filter(p=>p.is_active&&p.model&&p.color);
+  const items=valid.map(p=>'<option value="'+h(p.id)+'">'+h(p.product_name)+' / '+h(p.model)+' / '+h(p.color)+' / '+h(p.storage_version||'不适用')+'</option>').join('');
+  editor('采购单添加具体机型 · '+poRow.po_number,
+   '<label>型号 / 颜色 / 内存<select name="product" class="control" required>'+items+'</select></label>'+
+   '<label>采购数量<input name="quantity" class="control" type="number" min="1" step="1" required></label>'+
+   '<label>预计到仓时间<input name="eta" class="control" type="date" required></label>'+
+   '<label>采购单价 EUR<input name="unit_cost" class="control" type="number" min="0" step=".01" required value="0"></label>',
+   v=>rpc('rfriend_erp_purchase_add_line_v2',{p_po_id:poRow.id,p_product_id:v.product,
+     p_quantity:Number(v.quantity),p_expected_arrival_at:v.eta,p_unit_cost_eur:Number(v.unit_cost)}));
+ }
+ async function progress(poRow){
+  const next={draft:'submitted',submitted:'approved',approved:'ordered'}[poRow.status];
+  if(!next)return;
+  if(next==='approved'&&!['admin','finance'].includes(profile?.role)){alert('只有管理员或财务可以审批采购单');return}
+  if(!confirm('将采购单 '+poRow.po_number+' 流转为 '+next+'？'))return;
+  try{await rpc('rfriend_erp_advance_status',{p_entity:'purchase_orders',p_id:poRow.id,p_status:next,p_note:'采购审批流转'});await erpProcurementTracking()}
+  catch(e){alert(errorMessage(e))}
+ }
  function renderRows(){
   const q=($('poSearch')?.value||'').trim().toLowerCase(),filter=$('poFilter')?.value||'all';
   filtered=data.filter(x=>(filter==='all'||filter==='alerts'&&
@@ -79,7 +98,7 @@
    '<option value="overdue">逾期未到</option><option value="partial_overdue">部分到货逾期</option><option value="due_today">今日应到</option>'+
    '<option value="missing_eta">缺 ETA</option><option value="received">全部到仓</option></select>'+
    '<button class="btn" id="poDownload">↓ 导出采购追踪</button></div></div><div id="poLines">读取中…</div></section>'+
-   '<section class="panel"><h3>采购单审批与创建</h3><div id="poSummary">读取中…</div></section>';
+   '<section class="panel"><div class="erp-header"><h3>采购单审批与创建</h3>'+ (canManage()?'<button id="poNew" class="btn primary">＋ 新建采购单</button>':'')+'</div><div id="poSummary">读取中…</div></section>';
   try{
    [data,po,products]=await Promise.all(['purchase_tracking','purchase_orders','product_catalog'].map(k=>erpData(k,true)));
    if(!$('poLines'))return;
@@ -89,8 +108,14 @@
      erpMetric('已逾期采购',overdue.length,'采购明细行')+
      erpMetric('今日应到',pending.filter(x=>['due_today','partial_due_today'].includes(x.delivery_alert)).length,'未到齐明细');
    $('poSearch').oninput=renderRows;$('poFilter').onchange=renderRows;renderRows();
-   $('poSummary').innerHTML=table(['采购单号','供应商','状态','创建时间','正式下单时间'],
-    po.map(x=>'<tr><td>'+h(x.po_number)+'</td><td>'+h(x.supplier)+'</td><td>'+h(x.status)+'</td><td>'+dt(x.created_at)+'</td><td>'+dt(x.ordered_at)+'</td></tr>'));
+   $('poSummary').innerHTML=table(['采购单号','供应商','状态','创建时间','正式下单时间','采购操作'],
+    po.map((x,i)=>'<tr><td>'+h(x.po_number)+'</td><td>'+h(x.supplier)+'</td><td>'+h(x.status)+'</td><td>'+dt(x.created_at)+'</td><td>'+dt(x.ordered_at)+'</td><td>'+
+      (canManage()&&x.status==='draft'?'<button class="btn poAddLine" data-i="'+i+'">＋ 添加机型</button>':'')+
+      (canManage()&&['draft','submitted','approved'].includes(x.status)?'<button class="btn poAdvance" data-i="'+i+'">流转审批</button>':'')+
+      '</td></tr>'));
+   $('poSummary').querySelectorAll('.poAddLine').forEach(b=>b.onclick=()=>addLine(po[Number(b.dataset.i)]));
+   $('poSummary').querySelectorAll('.poAdvance').forEach(b=>b.onclick=()=>progress(po[Number(b.dataset.i)]));
+   $('poNew')?.addEventListener('click',()=>erpOpenCreate('purchase_orders'));
   }catch(err){if($('poLines'))$('poLines').textContent='采购数据读取失败：'+errorMessage(err)}
  };
 })();
