@@ -30,8 +30,8 @@
   const filtered=grouped.filter(x=>(cell.r===null||dimValue(x,state.row)===cell.r)&&(cell.c===null||dimValue(x,state.col)===cell.c));
   const m=erpModal('<div class="message">订单明细（去重后的独立 ERP 订单） · '+filtered.length+' 单。套装商品不按单品数量拆分。</div>'+
    '<div class="erp-toolbar"><button class="btn" id="pivotDrillExport">↓ 导出当前明细 CSV</button></div>'+
-   '<div class="erp-scroll"><table><thead><tr><th>订单号</th><th>渠道</th><th>系列</th><th>型号</th><th>品类</th><th>下单日期</th><th>状态</th></tr></thead><tbody>'+
-   filtered.slice(0,150).map(x=>'<tr>'+['external_order_id','channel_code','series','model','category','order_local_date','order_status']
+   '<div class="erp-scroll"><table><thead><tr><th>订单号</th><th>渠道</th><th>实际商品名称 / 原始描述</th><th>系列</th><th>型号</th><th>品类</th><th>下单日期</th><th>状态</th></tr></thead><tbody>'+
+   filtered.slice(0,150).map(x=>'<tr>'+['external_order_id','channel_code','product_description','series','model','category','order_local_date','order_status']
     .map(k=>'<td>'+html(x[k]||'—')+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>'+
    '<p class="erp-mini">页面仅展示前 150 单；导出包含全部 '+filtered.length+' 单。</p>','交叉明细 / Drill-down');
   m.querySelector('#pivotDrillExport').onclick=()=>erpDownload('cross-analysis-detail',filtered);
