@@ -268,7 +268,7 @@
   };
  }
 async function returnsPage(){
-  $('content').innerHTML=bar('退换货与 OPPO 二手机',
+  $('content').innerHTML=bar('退换货管理',
    '<button id="v4NewReturn" class="btn primary">＋ 新建退货／换货申请</button>',
    '退货质检确认合格后，只有原订单、单件数量、OPPO 品牌和 IMEI 可追溯的记录才自动转入二手机仓；不符合条件保持待核，不会重复入库。')+
    '<div class="cards" id="v4ReturnStats"></div>'+
@@ -276,20 +276,23 @@ async function returnsPage(){
    
    '<section class="panel"><div class="erp-header"><h3>退款申请与处理状态</h3><button class="btn primary" id="v4RefundCreate">＋ 发起退款申请</button></div><div id="v4RefundList">读取中…</div></section>';
   try{
-   const [returns,used,refunds]=await Promise.all(['returns_v4','used_devices','refunds'].map(k=>erpData(k,true)));
+   const [returns,used,refunds,orderDetails]=await Promise.all(['returns_v4','used_devices','refunds','order_products_v5'].map(k=>erpData(k,true)));
+   const productByOrder=new Map(orderDetails.map(o=>[o.id,o]));
    if(!$('v4ReturnsList'))return;
    $('v4ReturnStats').innerHTML=erpMetric('退换货申请',returns.length,'按 RMA 单据')+
     erpMetric('已流转二手机',returns.filter(x=>x.used_transfer_status==='transferred').length,'满足全部质检与串码条件')+
     erpMetric('二手机台账',used.length,'按设备 IMEI')+
     erpMetric('退款申请',refunds.length,'真实 ERP 退款台账');
-   $('v4ReturnsList').innerHTML=table(['退货单','关联订单','类型','退货状态','质检','二手机流转','退款状态','明细行','操作'],
-    returns.map((r,i)=>'<tr><td>'+h(r.rma_number)+'</td><td>'+h(r.external_order_id)+'</td><td>'+h(r.type)+'</td>'+
+   $('v4ReturnsList').innerHTML=table(['退货单','关联订单','商品名称 / 型号 / 颜色 / 内存','类型','退货状态','质检','二手机流转','退款状态','明细行','操作'],
+    returns.map((r,i)=>'<tr><td>'+h(r.rma_number)+'</td><td>'+h(r.external_order_id)+'</td>'+
+    '<td class="v5-product-text">'+h(productByOrder.get(r.order_id)?.product_names||'商品名称待确认')+'</td><td>'+h(r.type)+'</td>'+
      '<td>'+h(r.return_status)+'</td><td>'+h(r.inspection_status)+'</td><td>'+h(r.used_transfer_status)+'</td>'+
      '<td>'+h(r.refund_status)+'</td><td>'+r.item_lines+'</td>'+
      '<td>'+(['admin','operations','warehouse'].includes(role())?
       '<button class="btn v4ReturnLines" data-i="'+i+'">明细 / IMEI</button> <button class="btn v4InspectReturn" data-i="'+i+'">质检</button> <button class="btn v4FinalizeReturn" data-i="'+i+'">验证流转</button>':'只读')+'</td></tr>'));
-   $('v4RefundList').innerHTML=table(['订单 UUID','退款金额','退款状态','支付回执','申请时间'],
-    refunds.map(x=>'<tr><td>'+h(x.order_id)+'</td><td>'+h(eur(x.amount_eur))+'</td><td>'+h(x.status)+'</td>'+
+   $('v4RefundList').innerHTML=table(['订单号','订单商品名称','退款金额','退款状态','支付回执','申请时间'],
+    refunds.map(x=>'<tr><td>'+h(productByOrder.get(x.order_id)?.external_order_id||x.order_id)+'</td>'+
+    '<td class="v5-product-text">'+h(productByOrder.get(x.order_id)?.product_names||'商品名称待确认')+'</td><td>'+h(eur(x.amount_eur))+'</td><td>'+h(x.status)+'</td>'+
      '<td>'+h(x.payment_reference||'未完成')+'</td><td>'+h(erpDate(x.created_at))+'</td></tr>'));
    $('v4RefundCreate')?.addEventListener('click',()=>erpRefundCreate());
    
