@@ -156,13 +156,13 @@
    '<section class="panel"><h3>OPPO 二手机订单 · IMEI 出库</h3><div id="v5UsedOrders">读取中…</div></section>'+
    '<section class="panel"><h3>二手机仓库设备明细</h3><div id="v5UsedStock">读取中…</div></section>';
   try{
-   const [orders,used]=await Promise.all([erpData('used_orders_trace',true),erpData('used_devices',true)]);
+   const [orders,used]=await Promise.all([erpData('used_orders_v5',true),erpData('used_devices',true)]);
    if(!$('v5UsedOrders'))return;
    const available=used.filter(x=>String(x.brand).toUpperCase()==='OPPO'&&x.status==='ready'&&x.warehouse_id);
    function draw(){
     const q=($('v5UsedSearch')?.value||'').trim().toLowerCase();
     const matches=orders.filter(o=>(o.order_number+' '+o.imei+' '+(o.tracking_number||'')).toLowerCase().includes(q));
-    $('v5UsedOrders').innerHTML=tbl(['订单号','IMEI','型号','颜色','内存','订单状态','快递公司','快递单号','出库时间','操作'],
+    $('v5UsedOrders').innerHTML=tbl(['订单号','商品名称 / 型号','IMEI','颜色','内存','订单状态','快递公司','快递单号','出库时间','操作'],
      matches.map((x,i)=>'<tr><td>'+h(x.order_number)+'</td><td>'+h(x.imei||'待绑定')+'</td>'+
      '<td>'+h(x.model||'—')+'</td><td>'+h(x.color||'—')+'</td><td>'+h(x.memory_version||'—')+'</td>'+
      '<td>'+h(x.order_status)+'</td><td>'+h(x.carrier||'—')+'</td><td>'+h(x.tracking_number||'—')+'</td>'+
