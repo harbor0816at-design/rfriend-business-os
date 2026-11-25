@@ -4,7 +4,7 @@
 const ERP_NAV=[
  ['dashboard','▦','经营总览','Overview'],
  ['tasks','☑','我的工作台','My workspace'],
- ['intake','⇪','订单导入','Order intake'],
+ ['intake','⇪','订单复核与导入','Order review & import'],
  ['orders','↗','销售订单','Sales orders'],
  ['products','▤','商品管理','Products'],
  ['inventory','▣','库存管理','Inventory'],
@@ -79,7 +79,7 @@ const ERP_MODULES={
  products:{title:'商品管理',en:'Products',tables:[['products','商品目录'],['sku_dictionary','SKU 字典'],['product_keyword_rules','SKU 识别规则']]},
  movements:{title:'库存流水',en:'Stock movements',tables:[['inventory_movements','正式库存流水']]},
  tasks:{title:'我的工作台',en:'My workspace',tables:[['work_tasks','工作任务']]},
- intake:{title:'订单导入',en:'Order intake',tables:[['import_batches','导入批次'],['order_source_records','历史源文件行'],['reconciliation_cases','数据质量异常']]},
+ intake:{title:'订单复核与导入',en:'Order review & import',tables:[['import_batches','导入批次'],['order_source_records','历史源文件行'],['reconciliation_cases','数据质量异常']]},
  orders:{title:'销售订单',en:'Sales orders',tables:[['orders','订单主表'],['order_items','订单商品明细'],['order_status_history','订单状态历史']]},
  inventory:{title:'库存管理',en:'Inventory',tables:[['stock_balances','仓库库存']]},
  purchase:{title:'采购管理',en:'Purchasing',tables:[['purchase_orders','采购单'],['purchase_items','采购明细']]},
@@ -791,6 +791,7 @@ async function erpRenderPage(){
   }
   return;
  }
+ if(typeof window.erpV5OrderPage==='function'&&await window.erpV5OrderPage(erpSelectedPage))return;
  if(typeof window.erpV5Page==='function'&&await window.erpV5Page(erpSelectedPage))return;
  if(typeof window.erpV4Page==='function'&&await window.erpV4Page(erpSelectedPage))return;
  if(!ERP_MODULES[erpSelectedPage])return;
