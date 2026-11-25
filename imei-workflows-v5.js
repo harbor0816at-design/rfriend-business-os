@@ -70,9 +70,12 @@
    p_purchase_item_id:x.line,p_imei:x.imei,p_reference:x.reference
   }));
  }
- function newShipmentModal(){
+ async function newShipmentModal(){
+  const orders=await erpData('order_products_v5',true);
+  const ready=orders.filter(x=>['confirmed','part_shipped'].includes(x.order_status));
+  if(!ready.length){alert('当前没有已确认且尚未完成发货的订单；请先审核订单，才能依据 IMEI 出库。');return}
   form('新机订单按 IMEI 出库',[
-   field('ERP 销售订单 UUID',txt('order','必须是 confirmed / part_shipped 状态')),
+   field('销售订单号 / 商品名称',sel('order',ready.map(o=>[o.id,o.external_order_id+' · '+o.product_names.slice(0,110)]))),
    field('实际出库 IMEI',txt('imei','必须已登记在可售仓')),
    field('承运商',txt('carrier','Post AT / GLS / DHL')),
    field('快递单号',txt('tracking','承运商运单号'))
@@ -85,7 +88,7 @@
   form('新建二手机销售订单 · IMEI 锁定',[
    field('订单号',txt('order','订单平台的唯一订单号')),
    field('销售渠道',sel('channel',channelOptions())),
-   field('OPPO IMEI / 型号',sel('imei',available.map(d=>[d.imei,d.imei+' · '+d.model+' · '+(d.color||'')]))),
+   field('OPPO IMEI / 型号',sel('imei',available.map(d=>[d.imei,(allProducts.find(p=>p.id===d.product_id)?.product_name||d.model)+' · '+(d.color||'')+' · '+(d.storage_variant||'')+' · IMEI '+d.imei]))),
    field('客户姓名',txt('customer','可选','text',false))
   ].join(''),async x=>call('rfriend_erp_used_order_create',{
    p_order_number:x.order,p_imei:x.imei,p_channel_id:x.channel,p_customer_name:x.customer||null
@@ -185,7 +188,7 @@
   try{
    const events=(await erpData('imei_trace',true)).filter(x=>['sales_shipment','used_shipment'].includes(x.action));
    if(!$('v5ShipRecords'))return;
-   $('v5ShipRecords').innerHTML=tbl(['出库时间','新机/二手机','订单号','IMEI','型号','来源仓库','承运商','快递单号'],
+   $('v5ShipRecords').innerHTML=tbl(['出库时间','新机/二手机','订单号','IMEI','商品名称 / 型号','颜色','内存版本','来源仓库','承运商','快递单号'],
     events.map(e=>'<tr><td>'+h(xdate(e.created_at))+'</td><td>'+h(opName[e.action])+'</td>'+
     '<td>'+h(e.order_number)+'</td><td>'+h(e.imei)+'</td><td>'+h(e.model||e.product_name)+'</td>'+
     '<td>'+h(e.from_warehouse||'—')+'</td><td>'+h(e.carrier)+'</td><td>'+h(e.tracking_number)+'</td></tr>'));
